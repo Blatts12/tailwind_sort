@@ -1,0 +1,11 @@
+{
+  "private": true,
+  "type": "module",
+  "description": "Data generation for tailwind_sort. Keep tailwindcss and @tailwindcss/node on the same version.",
+  "dependencies": {
+    "tailwindcss": "4.3.3",
+    "@tailwindcss/node": "4.3.3",
+    "prettier": "^3",
+    "prettier-plugin-tailwindcss": "*"
+  }
+}

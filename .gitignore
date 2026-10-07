@@ -1,0 +1,8 @@
+/_build
+/.expert
+/.elixir_ls
+/.dexter
+/deps
+/scripts/node_modules
+/scripts/src
+/scripts/.fixture-input.css

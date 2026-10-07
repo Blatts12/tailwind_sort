@@ -1,0 +1,11 @@
+@import "tailwindcss";
+@theme {
+  --color-*: initial;
+  --color-brand: #f00;
+  --color-ink-900: #111;
+  --text-*: initial;
+  --text-huge: 5rem;
+  --breakpoint-*: initial;
+  --breakpoint-tablet: 48rem;
+  --breakpoint-desk: 80rem;
+}

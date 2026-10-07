@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #f00;
+  --color-brand-500: #e00;
+  --text-huge: 5rem;
+  --breakpoint-3xl: 120rem;
+  --font-display: "Satoshi", sans-serif;
+  --spacing-foo: 13px;
+}
+
+@custom-variant theme-x (&:where(.x, .x *));
+@custom-variant dark (&:where(.dark, .dark *));
+
+@utility tab-* {
+  tab-size: --value(integer);
+}
+
+@utility content-auto {
+  content-visibility: auto;
+}
