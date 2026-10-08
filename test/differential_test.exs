@@ -8,14 +8,14 @@ defmodule TailwindSort.DifferentialTest do
 
   for {name, css} <- [
         default: nil,
-        custom: "custom.css",
-        prefix: "prefix.css",
-        reset: "reset.css"
+        custom: "test/fixtures/custom.css",
+        prefix: "test/fixtures/prefix.css",
+        reset: "test/fixtures/reset.css"
       ] do
     @tag fixture: name
     test "matches prettier-plugin-tailwindcss on #{name} stylesheet" do
       {:ok, cases} = :file.consult(~c"test/fixtures/fx_#{unquote(name)}.term")
-      design = Design.load_design(if css = unquote(css), do: Path.join("test/fixtures", css))
+      design = Design.load_design(unquote(css))
 
       mismatches =
         for {input, expected} <- cases,
