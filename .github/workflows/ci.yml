@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Format, Doctor, Credo, Dialyzer, Test
+    runs-on: ubuntu-24.04
+    env:
+      MIX_ENV: dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        id: beam
+        with:
+          version-file: .tool-versions
+          version-type: strict
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: lint-${{ runner.os }}-${{ steps.beam.outputs.elixir-version }}-${{ steps.beam.outputs.otp-version }}-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            lint-${{ runner.os }}-${{ steps.beam.outputs.elixir-version }}-${{ steps.beam.outputs.otp-version }}-
+
+      - run: mix deps.get
+
+      - run: mix format --check-formatted
+
+      - run: mix doctor
+
+      - run: mix credo
+
+      - run: mix dialyzer
+
+      - run: mix test
+        env:
+          MIX_ENV: test
+
+  matrix:
+    name: Test (Elixir ${{ matrix.elixir }}, OTP ${{ matrix.otp }})
+    runs-on: ubuntu-24.04
+    env:
+      MIX_ENV: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - elixir: "1.15.8"
+            otp: "26.2.5.21"
+          - elixir: "1.16.3"
+            otp: "26.2.5.21"
+          - elixir: "1.17.3"
+            otp: "27.3.4.17"
+          - elixir: "1.18.5"
+            otp: "27.3.4.17"
+          - elixir: "1.19.6"
+            otp: "28.5.0.6"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ matrix.elixir }}
+          otp-version: ${{ matrix.otp }}
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: test-${{ runner.os }}-${{ matrix.elixir }}-${{ matrix.otp }}-${{ hashFiles('mix.lock') }}
+
+      - run: mix deps.get
+
+      - run: mix test
