@@ -1,15 +1,11 @@
 # tailwind_sort
 
-You want Tailwind classes in a stable, predictable order, but your Elixir project has no reason to run Node.
 `tailwind_sort` is a `mix format` plugin that sorts Tailwind CSS v4 classes exactly like
-[prettier-plugin-tailwindcss](https://github.com/tailwindlabs/prettier-plugin-tailwindcss). It's pure Elixir,
-with no Node and no NIF.
+[prettier-plugin-tailwindcss](https://github.com/tailwindlabs/prettier-plugin-tailwindcss).
 
 It works on `~H` and `.heex`, Hologram's `~HOLO` and `.holo`, and `~CLS"..."` class lists in plain Elixir.
 
-This guide assumes you know Tailwind v4 and already run `mix format` in your project.
-
-## How do I set it up?
+## Setup
 
 1. Add the dependency to `mix.exs`. You only need it in dev and test, never at runtime.
 
@@ -73,14 +69,6 @@ can stay a dev-only dependency. A good spot for it is your `html_helpers/0`:
 defmacro sigil_CLS({:<<>>, _meta, [classes]}, []), do: classes
 ```
 
-Let's break down the example above:
-
-- The macro receives the class string at compile time and returns it unchanged. Your app pays nothing at runtime.
-- The `[]` pattern means `~CLS` takes no modifiers.
-- Multi-letter sigils are uppercase-only, so they don't interpolate. Compose dynamic parts with lists instead.
-
-We've verified `~CLS` alongside Styler, which handles `.ex` files, in the same `.formatter.exs`.
-
 ## Icons
 
 Phoenix ships icons through `@plugin "../vendor/heroicons"`. JS plugins don't run here, so we emulate that one.
@@ -95,30 +83,38 @@ instead of moving to the front, so the formatter won't catch your typos.
 
 ## How does it stay compliant?
 
-Tailwind's ordering lives in `compile.ts`, and it's small enough to port directly. It compares classes by these
-keys, in this order:
+Tailwind sorts classes in
+[`compile.ts`](https://github.com/tailwindlabs/tailwindcss/blob/v4.3.3/packages/tailwindcss/src/compile.ts). That
+code is short, so we ported it to Elixir as is. It compares two classes step by step, and the first step that
+finds a difference decides:
 
-1. The variant bitmask, with one bit per variant in registration order. Breakpoints and container queries compare
-   by value.
-2. The lowest property index from `property-order.ts`.
-3. The declaration count. More declarations sort first.
-4. The class name, with numbers compared as numbers.
+1. Variants. Every variant, like `hover` or `md`, has a fixed spot in Tailwind's list. Classes without variants
+   come first. With several variants, the one latest in the list counts most. Breakpoints and container sizes sort
+   by width.
+2. CSS properties. Tailwind keeps a fixed list of CSS properties in
+   [`property-order.ts`](https://github.com/tailwindlabs/tailwindcss/blob/v4.3.3/packages/tailwindcss/src/property-order.ts),
+   where `display` comes before `padding`. The class whose properties show up earlier in that list goes first.
+3. Size. The class that writes more CSS declarations goes first.
+4. Name. Classes sort by name, with numbers compared as numbers, so `p-2` comes before `p-10`.
 
-The hard part is knowing which properties each class generates. Porting `utilities.ts` would mean about 6,800
-lines of code. Instead, `scripts/extract.mjs` asks the real design system and collects:
+The hard part is step 2. We need to know which CSS properties each class sets. Tailwind works that out in
+[`utilities.ts`](https://github.com/tailwindlabs/tailwindcss/blob/v4.3.3/packages/tailwindcss/src/utilities.ts),
+which is about 6,800 lines long. Porting and maintaining all of that would be a big job. Instead,
+`scripts/extract.mjs` loads the real Tailwind package in Node. It asks Tailwind to build the CSS for a long list of
+sample classes and writes down which properties each one sets. The samples cover:
 
-- every class from `getClassList()`
-- every functional root, probed with each kind of value: bare numbers, each theme namespace, arbitrary values by
-  inferred data type, type hints and keywords
-- every kind of modifier
-- all variants, plus the compound chains Tailwind rejects, like `group-not-hover`
+- every class Tailwind lists on its own, from `getClassList()`
+- every utility that takes a value, like `p-*` or `bg-*`, tried with each kind of value: plain numbers, theme
+  keys, arbitrary values like `[10px]`, type hints like `[length:var(--x)]` and keywords like `auto`
+- every kind of modifier, like the `/50` in `bg-red-500/50`
+- every variant, plus which variant chains Tailwind accepts. Some look valid but aren't, like `group-not-hover`.
 
 The result ships as `priv/tailwind_data.etf`, about 850 KB. That's the cost of this approach. You get a bigger
-package, and we avoid porting and maintaining thousands of lines.
+package, and we skip porting thousands of lines.
 
-Your stylesheet gets read at format time. The plugin picks up:
+Your stylesheet gets read when you run `mix format`. The plugin picks up:
 
-- `@theme`, including `--ns-*: initial` resets
+- `@theme`, including resets like `--color-*: initial`
 - `@custom-variant`
 - `@utility`, including what `--value()` and `--modifier()` accept
 - `prefix()`
@@ -142,7 +138,7 @@ Sorting takes about 25 to 45 µs per class.
 ## Elixir versions
 
 Three features need Elixir 1.15 or newer: the `~CLS` sigil, the `~HOLO` sigil, and chaining with
-`Phoenix.LiveView.HTMLFormatter` on the same sigil. We verified them on 1.15.8. On 1.14 the plugin only handles
+`Phoenix.LiveView.HTMLFormatter` on the same sigil. On 1.14 the plugin only handles
 `~H`, `.heex` and `.holo`.
 
 ## Known gaps
@@ -150,10 +146,11 @@ Three features need Elixir 1.15 or newer: the `~CLS` sigil, the `~HOLO` sigil, a
 - `@plugin` and `@config` aren't evaluated. That covers JS plugins like `@tailwindcss/forms`, typography and
   daisyUI. Their classes count as unknown and move to the front, where prettier would sort them. Heroicons-style
   plugins are the exception, see `icon_prefix`.
-- Say you define one key in two namespaces that a root reads, like `--color-lg` and `--text-lg`. The plugin picks
-  one by a priority learned from the data, not by your declaration.
-- Sub-keys on your own theme values, like `--text-huge--line-height`, don't show up in declaration counts. That
-  only matters for ties.
+- Some utilities read more than one group of theme variables. `text-*` reads both `--color-*` and `--text-*`. If
+  you define the same name in both, like `--color-lg` and `--text-lg`, the plugin picks the winner by a fixed
+  ranking taken from Tailwind's defaults. Your own stylesheet doesn't change that ranking.
+- Extra settings on your own theme values, like `--text-huge--line-height`, don't count toward step 3 of the sort.
+  That only matters when two classes tie on steps 1 and 2.
 
 ## How do I regenerate the data for another Tailwind version?
 
@@ -166,9 +163,3 @@ scripts/regen.sh && mix test
 
 The script needs Node, npm and network access, because it downloads Tailwind's sources. Only maintainers
 run it. Your users never need Node.
-
-## When should you not use it?
-
-If your project leans on JS plugins like daisyUI or `@tailwindcss/forms`, prettier with the official plugin gives
-you the right order and this package can't. The same goes for Tailwind v3, which this package doesn't support.
-For a Phoenix or Hologram app on plain Tailwind v4, you get prettier's order without adding Node to your toolchain.
