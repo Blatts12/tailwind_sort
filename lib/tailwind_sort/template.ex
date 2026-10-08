@@ -257,40 +257,33 @@ defmodule TailwindSort.Template do
       ~s(""") ->
         scan_expr(src, skip_past(src, pos + 3, ~s(""")), depth, collect, strings)
 
-      "\"" <> _ ->
-        case scan_string(src, pos + 1, ?", pos + 1, []) do
-          {:ok, next, chunks} ->
-            scan_expr(
-              src,
-              next,
-              depth,
-              collect,
-              if(collect, do: [chunks | strings], else: strings)
-            )
-
-          :error ->
-            :error
-        end
-
-      "'" <> _ ->
-        case scan_string(src, pos + 1, ?', pos + 1, []) do
+      <<q, _::binary>> when q in [?", ?'] ->
+        case scan_string(src, pos + 1, q, pos + 1, []) do
+          {:ok, next, chunks} when collect and q == ?" -> scan_expr(src, next, depth, collect, [chunks | strings])
           {:ok, next, _} -> scan_expr(src, next, depth, collect, strings)
           :error -> :error
         end
 
+      _ ->
+        scan_expr(src, skip_expr_token(src, pos), depth, collect, strings)
+    end
+  end
+
+  defp skip_expr_token(src, pos) do
+    case peek_bytes(src, pos, 2) do
       "#" <> _ ->
-        scan_expr(src, skip_past(src, pos, "\n"), depth, collect, strings)
+        skip_past(src, pos, "\n")
 
       "?" <> _ ->
         if pos > 0 and word_char?(:binary.at(src, pos - 1)),
-          do: scan_expr(src, pos + 1, depth, collect, strings),
-          else: scan_expr(src, find_char_literal_end(src, pos + 1), depth, collect, strings)
+          do: pos + 1,
+          else: find_char_literal_end(src, pos + 1)
 
       <<?~, c, _::binary>> when c in ?a..?z or c in ?A..?Z ->
-        scan_expr(src, find_sigil_end(src, pos + 1), depth, collect, strings)
+        find_sigil_end(src, pos + 1)
 
       _ ->
-        scan_expr(src, pos + 1, depth, collect, strings)
+        pos + 1
     end
   end
 

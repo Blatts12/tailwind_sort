@@ -12,7 +12,7 @@ defmodule TailwindSort.MixProject do
       deps: deps(),
       description: "mix format plugin that sorts Tailwind CSS v4 classes like prettier-plugin-tailwindcss",
       package: [licenses: ["MIT"], files: ~w(lib priv scripts mix.exs README.md LICENSE)],
-      dialyzer: [plt_add_apps: [:mix]],
+      dialyzer: [plt_add_apps: [:mix]]
     ]
   end
 

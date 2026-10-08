@@ -10,7 +10,7 @@ defmodule TailwindSort.Stylesheet do
   def read_stylesheet(nil), do: %__MODULE__{}
 
   def read_stylesheet(path) do
-    path |> load_css_with_imports(MapSet.new()) |> parse_stylesheet()
+    path |> load_css_with_imports([]) |> parse_stylesheet()
   end
 
   def parse_stylesheet(css) do
@@ -26,10 +26,10 @@ defmodule TailwindSort.Stylesheet do
   defp load_css_with_imports(path, seen) do
     path = Path.expand(path)
 
-    if MapSet.member?(seen, path) do
+    if path in seen do
       ""
     else
-      seen = MapSet.put(seen, path)
+      seen = [path | seen]
       text = File.read!(path)
 
       Regex.replace(~r/@import\s+["'](\.{1,2}\/[^"']+|\/[^"']+)["'][^;]*;/, text, fn _, file ->
