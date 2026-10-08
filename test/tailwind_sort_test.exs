@@ -7,11 +7,13 @@ defmodule TailwindSortTest do
 
   describe "sort/2" do
     test "unknown classes first, `...` last, known duplicates removed" do
-      assert TailwindSort.sort_classes("p-4 my-thing flex ... flex my-thing") == "my-thing my-thing flex p-4 ..."
+      assert TailwindSort.sort_classes("p-4 my-thing flex ... flex my-thing") ==
+               "my-thing my-thing flex p-4 ..."
     end
 
     test "variants after base utilities, breakpoints by size" do
-      assert TailwindSort.sort_classes("lg:p-2 sm:p-2 hover:p-2 p-2") == "p-2 hover:p-2 sm:p-2 lg:p-2"
+      assert TailwindSort.sort_classes("lg:p-2 sm:p-2 hover:p-2 p-2") ==
+               "p-2 hover:p-2 sm:p-2 lg:p-2"
     end
 
     test "uses @theme values from the stylesheet" do
@@ -22,7 +24,9 @@ defmodule TailwindSortTest do
       assert TailwindSort.sort_classes("p-4 bg-brand", stylesheet: css) == "bg-brand p-4"
       assert TailwindSort.sort_classes("p-4 bg-brand") == "bg-brand p-4"
       # content-auto exists only through the @utility in custom.css.
-      assert TailwindSort.sort_classes("p-4 content-auto flex", stylesheet: css) == "flex p-4 content-auto"
+      assert TailwindSort.sort_classes("p-4 content-auto flex", stylesheet: css) ==
+               "flex p-4 content-auto"
+
       assert TailwindSort.sort_classes("p-4 content-auto flex") == "content-auto flex p-4"
     end
   end
@@ -32,7 +36,9 @@ defmodule TailwindSortTest do
     test "hero- icons sort by the CSS the heroicons plugin emits" do
       assert TailwindSort.sort_classes("size-4 hero-x-mark mr-2") == "mr-2 hero-x-mark size-4"
 
-      assert TailwindSort.sort_classes("hero-x-mark-mini size-4 text-zinc-500 ml-1 shrink-0 animate-spin") ==
+      assert TailwindSort.sort_classes(
+               "hero-x-mark-mini size-4 text-zinc-500 ml-1 shrink-0 animate-spin"
+             ) ==
                "ml-1 hero-x-mark-mini size-4 shrink-0 animate-spin text-zinc-500"
     end
 
@@ -42,9 +48,13 @@ defmodule TailwindSortTest do
     end
 
     test "custom prefix and disabling" do
-      assert TailwindSort.sort_classes("size-4 lucide-check mr-2", icon_prefix: "lucide-") == "mr-2 lucide-check size-4"
+      assert TailwindSort.sort_classes("size-4 lucide-check mr-2", icon_prefix: "lucide-") ==
+               "mr-2 lucide-check size-4"
+
       assert TailwindSort.sort_classes("size-4 lucide-check mr-2") == "lucide-check mr-2 size-4"
-      assert TailwindSort.sort_classes("size-4 hero-x-mark mr-2", icon_prefix: nil) == "hero-x-mark mr-2 size-4"
+
+      assert TailwindSort.sort_classes("size-4 hero-x-mark mr-2", icon_prefix: nil) ==
+               "hero-x-mark mr-2 size-4"
     end
 
     test "formatter option" do
@@ -58,11 +68,14 @@ defmodule TailwindSortTest do
 
   describe "HEEx" do
     test "sorts static class attributes and collapses whitespace" do
-      assert format_heex(~s(<div class="  p-4\n  flex " id="a"></div>)) == ~s(<div class="flex p-4" id="a"></div>)
+      assert format_heex(~s(<div class="  p-4\n  flex " id="a"></div>)) ==
+               ~s(<div class="flex p-4" id="a"></div>)
     end
 
     test "sorts string literals inside class={...}, keeping interpolation in place" do
-      assert format_heex(~S|<.btn class={["p-4 flex", @on && "px-2 bg-red-500", "mt-#{@n} p-2 flex"]} />|) ==
+      assert format_heex(
+               ~S|<.btn class={["p-4 flex", @on && "px-2 bg-red-500", "mt-#{@n} p-2 flex"]} />|
+             ) ==
                ~S|<.btn class={["flex p-4", @on && "bg-red-500 px-2", "mt-#{@n} flex p-2"]} />|
     end
 
@@ -80,13 +93,20 @@ defmodule TailwindSortTest do
 
     test "custom attribute list" do
       src = ~s(<div class="p-4 flex" wrapper-class="p-4 flex"></div>)
-      out = TailwindSort.format(src, extension: ".heex", tailwind_sort: [attributes: ["wrapper-class"]])
+
+      out =
+        TailwindSort.format(src,
+          extension: ".heex",
+          tailwind_sort: [attributes: ["wrapper-class"]]
+        )
+
       assert out == ~s(<div class="p-4 flex" wrapper-class="flex p-4"></div>)
     end
   end
 
   describe "~CLS sigil" do
-    defp format_cls(src, config \\ []), do: TailwindSort.format(src, sigil: :CLS, tailwind_sort: config)
+    defp format_cls(src, config \\ []),
+      do: TailwindSort.format(src, sigil: :CLS, tailwind_sort: config)
 
     test "sorts the class list" do
       assert format_cls("p-4 flex border-red-500 border") == "flex border border-red-500 p-4"
@@ -135,7 +155,8 @@ defmodule TailwindSortTest do
     end
 
     test "HEEx does not treat braces in quoted values as interpolation" do
-      assert format_heex(~s(<div class="p-4 {x} flex"></div>)) == ~s(<div class="{x} flex p-4"></div>)
+      assert format_heex(~s(<div class="p-4 {x} flex"></div>)) ==
+               ~s(<div class="{x} flex p-4"></div>)
     end
   end
 end

@@ -66,7 +66,10 @@ defmodule TailwindSort.Design do
     case :persistent_term.get(@data_key, nil) do
       nil ->
         data =
-          :code.priv_dir(:tailwind_sort) |> Path.join("tailwind_data.etf") |> File.read!() |> :erlang.binary_to_term()
+          :code.priv_dir(:tailwind_sort)
+          |> Path.join("tailwind_data.etf")
+          |> File.read!()
+          |> :erlang.binary_to_term()
 
         :persistent_term.put(@data_key, data)
         data
@@ -91,7 +94,9 @@ defmodule TailwindSort.Design do
       end)
 
     {custom_static, custom_functional} = split_custom_utilities(css.utilities, property_index)
-    custom_functional = put_icon_root(custom_functional, Keyword.get(opts, :icon_prefix), property_index)
+
+    custom_functional =
+      put_icon_root(custom_functional, Keyword.get(opts, :icon_prefix), property_index)
 
     %__MODULE__{
       version: d.version,
@@ -153,7 +158,9 @@ defmodule TailwindSort.Design do
       end)
 
     breakpoints =
-      for {"--breakpoint-" <> name, _} <- design.theme, not String.contains?(name, "--"), into: %{} do
+      for {"--breakpoint-" <> name, _} <- design.theme,
+          not String.contains?(name, "--"),
+          into: %{} do
         {name, %{kind: :static, order: d.breakpoint_order, compounds: 1, compounds_with: 0}}
       end
 
@@ -169,7 +176,12 @@ defmodule TailwindSort.Design do
             {Map.put(acc, name, %{existing | kind: :static, compounds: compounds}), last}
 
           _ ->
-            {Map.put(acc, name, %{kind: :static, order: last + 1, compounds: compounds, compounds_with: 0}), last + 1}
+            {Map.put(acc, name, %{
+               kind: :static,
+               order: last + 1,
+               compounds: compounds,
+               compounds_with: 0
+             }), last + 1}
         end
       end)
 
@@ -228,7 +240,8 @@ defmodule TailwindSort.Design do
     %{
       any_value: args == [],
       modifier: String.contains?(body, "--modifier("),
-      ns: for("--" <> _ = a <- args, String.ends_with?(a, "-*"), do: String.trim_trailing(a, "-*")),
+      ns:
+        for("--" <> _ = a <- args, String.ends_with?(a, "-*"), do: String.trim_trailing(a, "-*")),
       bare: for(a <- args, a in ~w(integer number percentage ratio any), do: a),
       literal: for(<<q, _::binary>> = a <- args, q in [?", ?'], do: String.slice(a, 1..-2//1)),
       arbitrary: for("[" <> _ = a <- args, do: String.slice(a, 1..-2//1))
@@ -250,9 +263,14 @@ defmodule TailwindSort.Design do
   defp compute_decls_signature(decls, index) do
     {order, _} =
       Enum.reduce(decls, {MapSet.new(), false}, fn
-        _, {set, true} -> {set, true}
-        {"--tw-sort", v}, {set, false} when is_map_key(index, v) -> {MapSet.put(set, index[v]), true}
-        {p, _}, {set, false} -> {if(i = index[p], do: MapSet.put(set, i), else: set), false}
+        _, {set, true} ->
+          {set, true}
+
+        {"--tw-sort", v}, {set, false} when is_map_key(index, v) ->
+          {MapSet.put(set, index[v]), true}
+
+        {p, _}, {set, false} ->
+          {if(i = index[p], do: MapSet.put(set, i), else: set), false}
       end)
 
     {order |> MapSet.to_list() |> Enum.sort(), length(decls)}

@@ -31,7 +31,8 @@ defmodule TailwindSort.Template do
     fn name -> MapSet.member?(names, name) or Enum.any?(regexes, &Regex.match?(&1, name)) end
   end
 
-  defp apply_edits(src, [], pos, acc), do: IO.iodata_to_binary([acc, binary_part(src, pos, byte_size(src) - pos)])
+  defp apply_edits(src, [], pos, acc),
+    do: IO.iodata_to_binary([acc, binary_part(src, pos, byte_size(src) - pos)])
 
   defp apply_edits(src, [{start, stop, new} | rest], pos, acc),
     do: apply_edits(src, rest, stop, [acc, binary_part(src, pos, start - pos), new])
@@ -138,7 +139,14 @@ defmodule TailwindSort.Template do
   defp scan_attribute_value(src, pos, sort?, ctx, edits) do
     case peek_bytes(src, pos, 1) do
       q when q in ["\"", "'"] ->
-        case scan_quoted_value(src, pos + 1, :binary.first(q), ctx.interpolate_quoted, pos + 1, []) do
+        case scan_quoted_value(
+               src,
+               pos + 1,
+               :binary.first(q),
+               ctx.interpolate_quoted,
+               pos + 1,
+               []
+             ) do
           {:ok, next, chunks} ->
             edits = if sort?, do: build_chunk_edits(src, chunks, ctx, edits), else: edits
             scan_attributes(src, next, ctx, edits)
@@ -150,7 +158,11 @@ defmodule TailwindSort.Template do
       "{" ->
         case scan_expr(src, pos + 1, 1, true, []) do
           {:ok, next, strings} ->
-            edits = if sort?, do: Enum.reduce(strings, edits, &build_chunk_edits(src, &1, ctx, &2)), else: edits
+            edits =
+              if sort?,
+                do: Enum.reduce(strings, edits, &build_chunk_edits(src, &1, ctx, &2)),
+                else: edits
+
             scan_attributes(src, next, ctx, edits)
 
           :error ->
@@ -162,13 +174,17 @@ defmodule TailwindSort.Template do
 
       _ ->
         {_, next} = take_bytes_while(src, pos, &(&1 not in ~c" \t\r\n>"))
-        edits = if sort?, do: build_chunk_edits(src, [{:static, pos, next}], ctx, edits), else: edits
+
+        edits =
+          if sort?, do: build_chunk_edits(src, [{:static, pos, next}], ctx, edits), else: edits
+
         scan_attributes(src, next, ctx, edits)
     end
   end
 
   # Returns the chunks in order. Each one is `{:static, start, stop}` or `{:dynamic, start, stop}`.
-  defp scan_quoted_value(src, pos, _q, _interp, _start, _chunks) when pos >= byte_size(src), do: :error
+  defp scan_quoted_value(src, pos, _q, _interp, _start, _chunks) when pos >= byte_size(src),
+    do: :error
 
   defp scan_quoted_value(src, pos, q, interp, start, chunks) do
     case :binary.at(src, pos) do
@@ -178,7 +194,10 @@ defmodule TailwindSort.Template do
       ?{ when interp ->
         case scan_expr(src, pos + 1, 1, false, []) do
           {:ok, next, _} ->
-            scan_quoted_value(src, next, q, interp, next, [{:dynamic, pos, next}, {:static, start, pos} | chunks])
+            scan_quoted_value(src, next, q, interp, next, [
+              {:dynamic, pos, next},
+              {:static, start, pos} | chunks
+            ])
 
           :error ->
             :error
@@ -211,7 +230,11 @@ defmodule TailwindSort.Template do
               collapse_end: i == last
             ]
 
-        new = if statics == [] or String.contains?(old, "\\"), do: old, else: Sorter.sort_class_string(old, ctx.d, opts)
+        new =
+          if statics == [] or String.contains?(old, "\\"),
+            do: old,
+            else: Sorter.sort_class_string(old, ctx.d, opts)
+
         if new == old, do: acc, else: [{s, e, new} | acc]
     end)
   end
@@ -239,7 +262,13 @@ defmodule TailwindSort.Template do
       "\"" <> _ ->
         case scan_string(src, pos + 1, ?", pos + 1, []) do
           {:ok, next, chunks} ->
-            scan_expr(src, next, depth, collect, if(collect, do: [chunks | strings], else: strings))
+            scan_expr(
+              src,
+              next,
+              depth,
+              collect,
+              if(collect, do: [chunks | strings], else: strings)
+            )
 
           :error ->
             :error
@@ -276,8 +305,14 @@ defmodule TailwindSort.Template do
 
       "\#{" ->
         case scan_expr(src, pos + 2, 1, false, []) do
-          {:ok, next, _} -> scan_string(src, next, q, next, [{:dynamic, pos, next}, {:static, start, pos} | chunks])
-          :error -> :error
+          {:ok, next, _} ->
+            scan_string(src, next, q, next, [
+              {:dynamic, pos, next},
+              {:static, start, pos} | chunks
+            ])
+
+          :error ->
+            :error
         end
 
       <<^q, _::binary>> ->
@@ -338,6 +373,8 @@ defmodule TailwindSort.Template do
   end
 
   defp find_take_stop(src, pos, fun) do
-    if pos < byte_size(src) and fun.(:binary.at(src, pos)), do: find_take_stop(src, pos + 1, fun), else: pos
+    if pos < byte_size(src) and fun.(:binary.at(src, pos)),
+      do: find_take_stop(src, pos + 1, fun),
+      else: pos
   end
 end

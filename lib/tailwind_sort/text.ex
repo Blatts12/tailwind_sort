@@ -13,7 +13,8 @@ defmodule TailwindSort.Text do
   defp scan_segments(<<?\\, n, rest::binary>>, sep, st, cur, parts),
     do: scan_segments(rest, sep, st, [n, ?\\ | cur], parts)
 
-  defp scan_segments(<<?\\>>, sep, st, cur, parts), do: scan_segments(<<>>, sep, st, [?\\ | cur], parts)
+  defp scan_segments(<<?\\>>, sep, st, cur, parts),
+    do: scan_segments(<<>>, sep, st, [?\\ | cur], parts)
 
   defp scan_segments(<<q, rest::binary>>, sep, st, cur, parts) when q in [?", ?'] do
     {str, rest} = take_quoted_string(rest, q, [q])
@@ -26,14 +27,17 @@ defmodule TailwindSort.Text do
   defp scan_segments(<<c, rest::binary>>, sep, [c | st], cur, parts) when c in [?), ?], ?}],
     do: scan_segments(rest, sep, st, [c | cur], parts)
 
-  defp scan_segments(<<c, rest::binary>>, sep, st, cur, parts), do: scan_segments(rest, sep, st, [c | cur], parts)
+  defp scan_segments(<<c, rest::binary>>, sep, st, cur, parts),
+    do: scan_segments(rest, sep, st, [c | cur], parts)
 
   defp to_closing_bracket(?(), do: ?)
   defp to_closing_bracket(?[), do: ?]
   defp to_closing_bracket(?{), do: ?}
 
   # Returns `{chunk, rest}`. The chunk includes the closing quote when the string has one.
-  defp take_quoted_string(<<?\\, n, rest::binary>>, q, acc), do: take_quoted_string(rest, q, [acc, ?\\, n])
+  defp take_quoted_string(<<?\\, n, rest::binary>>, q, acc),
+    do: take_quoted_string(rest, q, [acc, ?\\, n])
+
   defp take_quoted_string(<<q, rest::binary>>, q, acc), do: {wrap_chunk([acc, q]), rest}
   defp take_quoted_string(<<c, rest::binary>>, q, acc), do: take_quoted_string(rest, q, [acc, c])
   defp take_quoted_string(<<>>, _q, acc), do: {wrap_chunk(acc), <<>>}
@@ -66,7 +70,10 @@ defmodule TailwindSort.Text do
   defp scan_arbitrary_value(<<?(, rest::binary>>, st), do: scan_arbitrary_value(rest, [?) | st])
   defp scan_arbitrary_value(<<?[, rest::binary>>, st), do: scan_arbitrary_value(rest, [?] | st])
   defp scan_arbitrary_value(<<c, _::binary>>, []) when c in [?), ?], ?}, ?;], do: false
-  defp scan_arbitrary_value(<<c, rest::binary>>, [c | st]) when c in [?), ?], ?}], do: scan_arbitrary_value(rest, st)
+
+  defp scan_arbitrary_value(<<c, rest::binary>>, [c | st]) when c in [?), ?], ?}],
+    do: scan_arbitrary_value(rest, st)
+
   defp scan_arbitrary_value(<<_, rest::binary>>, st), do: scan_arbitrary_value(rest, st)
 
   @doc """
@@ -75,7 +82,9 @@ defmodule TailwindSort.Text do
   keeps its underscores.
   """
   def decode_arbitrary_value(input) do
-    if String.contains?(input, "("), do: decode_function_calls(input, []), else: replace_underscores(input, false)
+    if String.contains?(input, "("),
+      do: decode_function_calls(input, []),
+      else: replace_underscores(input, false)
   end
 
   defp decode_function_calls(<<>>, acc), do: acc |> Enum.reverse() |> IO.iodata_to_binary()
@@ -84,24 +93,37 @@ defmodule TailwindSort.Text do
     case Regex.run(~r/^([a-zA-Z0-9_-]*)\(/, input) do
       [whole, name] ->
         {inner, rest} =
-          take_balanced_parens(binary_part(input, byte_size(whole), byte_size(input) - byte_size(whole)), 1, [])
+          take_balanced_parens(
+            binary_part(input, byte_size(whole), byte_size(input) - byte_size(whole)),
+            1,
+            []
+          )
 
         decoded_inner =
           cond do
             name == "url" or String.ends_with?(name, "_url") ->
               inner
 
-            name in ["var", "theme"] or String.ends_with?(name, "_var") or String.ends_with?(name, "_theme") ->
+            name in ["var", "theme"] or String.ends_with?(name, "_var") or
+                String.ends_with?(name, "_theme") ->
               case split_top_level(inner, ",") do
                 [first | others] ->
-                  Enum.join([replace_underscores(first, true) | Enum.map(others, &decode_arbitrary_value/1)], ",")
+                  Enum.join(
+                    [
+                      replace_underscores(first, true)
+                      | Enum.map(others, &decode_arbitrary_value/1)
+                    ],
+                    ","
+                  )
               end
 
             true ->
               decode_arbitrary_value(inner)
           end
 
-        decode_function_calls(rest, [[replace_underscores(name, false), "(", decoded_inner, ")"] | acc])
+        decode_function_calls(rest, [
+          [replace_underscores(name, false), "(", decoded_inner, ")"] | acc
+        ])
 
       nil ->
         <<c::utf8, rest::binary>> = input
@@ -110,11 +132,20 @@ defmodule TailwindSort.Text do
   end
 
   # Returns `{inner, rest}`. `inner` drops the closing paren and `rest` starts right after it.
-  defp take_balanced_parens(<<>>, _depth, acc), do: {acc |> Enum.reverse() |> IO.iodata_to_binary(), <<>>}
-  defp take_balanced_parens(<<?), rest::binary>>, 1, acc), do: {acc |> Enum.reverse() |> IO.iodata_to_binary(), rest}
-  defp take_balanced_parens(<<?), rest::binary>>, d, acc), do: take_balanced_parens(rest, d - 1, [?) | acc])
-  defp take_balanced_parens(<<?(, rest::binary>>, d, acc), do: take_balanced_parens(rest, d + 1, [?( | acc])
-  defp take_balanced_parens(<<c, rest::binary>>, d, acc), do: take_balanced_parens(rest, d, [c | acc])
+  defp take_balanced_parens(<<>>, _depth, acc),
+    do: {acc |> Enum.reverse() |> IO.iodata_to_binary(), <<>>}
+
+  defp take_balanced_parens(<<?), rest::binary>>, 1, acc),
+    do: {acc |> Enum.reverse() |> IO.iodata_to_binary(), rest}
+
+  defp take_balanced_parens(<<?), rest::binary>>, d, acc),
+    do: take_balanced_parens(rest, d - 1, [?) | acc])
+
+  defp take_balanced_parens(<<?(, rest::binary>>, d, acc),
+    do: take_balanced_parens(rest, d + 1, [?( | acc])
+
+  defp take_balanced_parens(<<c, rest::binary>>, d, acc),
+    do: take_balanced_parens(rest, d, [c | acc])
 
   defp replace_underscores(input, keep_underscores?) do
     input

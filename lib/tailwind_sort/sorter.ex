@@ -12,8 +12,11 @@ defmodule TailwindSort.Sorter do
     ranks = rank_variants(resolved, d)
 
     Map.new(resolved, fn
-      {class, nil} -> {class, nil}
-      {class, {variants, sig}} -> {class, {Enum.reduce(variants, 0, &bor(&2, 1 <<< ranks[&1.raw])), sig, class}}
+      {class, nil} ->
+        {class, nil}
+
+      {class, {variants, sig}} ->
+        {class, {Enum.reduce(variants, 0, &bor(&2, 1 <<< ranks[&1.raw])), sig, class}}
     end)
   end
 
@@ -96,12 +99,15 @@ defmodule TailwindSort.Sorter do
 
     {prefix, classes, whitespace} =
       if opts[:ignore_first] && classes != [],
-        do: {hd(classes) <> (List.first(whitespace) || ""), tl(classes), Enum.drop(whitespace, 1)},
+        do:
+          {hd(classes) <> (List.first(whitespace) || ""), tl(classes), Enum.drop(whitespace, 1)},
         else: {"", classes, whitespace}
 
     {suffix, classes, whitespace} =
       if opts[:ignore_last] && classes != [],
-        do: {(List.last(whitespace) || "") <> List.last(classes), Enum.drop(classes, -1), Enum.drop(whitespace, -1)},
+        do:
+          {(List.last(whitespace) || "") <> List.last(classes), Enum.drop(classes, -1),
+           Enum.drop(whitespace, -1)},
         else: {"", classes, whitespace}
 
     {sorted, removed} = sort_class_list(classes, d, opts)
@@ -112,8 +118,20 @@ defmodule TailwindSort.Sorter do
       |> Enum.with_index()
       |> Enum.map(fn {c, i} -> c <> (Enum.at(whitespace, i) || "") end)
       |> Enum.join()
-      |> then(&Regex.replace(~r/^\s+/, &1, if(Keyword.get(opts, :collapse_start, true), do: "", else: " ")))
-      |> then(&Regex.replace(~r/\s+$/, &1, if(Keyword.get(opts, :collapse_end, true), do: "", else: " ")))
+      |> then(
+        &Regex.replace(
+          ~r/^\s+/,
+          &1,
+          if(Keyword.get(opts, :collapse_start, true), do: "", else: " ")
+        )
+      )
+      |> then(
+        &Regex.replace(
+          ~r/\s+$/,
+          &1,
+          if(Keyword.get(opts, :collapse_end, true), do: "", else: " ")
+        )
+      )
 
     Regex.replace(~r/\s+$/, prefix, " ") <> result <> Regex.replace(~r/^\s+/, suffix, " ")
   end

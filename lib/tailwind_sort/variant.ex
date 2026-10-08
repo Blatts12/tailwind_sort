@@ -24,9 +24,10 @@ defmodule TailwindSort.Variant do
       relative = String.first(selector) in [">", "+", "~"]
 
       selector =
-        if not relative and not String.starts_with?(selector, "@") and not String.contains?(selector, "&"),
-          do: "&:is(#{selector})",
-          else: selector
+        if not relative and not String.starts_with?(selector, "@") and
+             not String.contains?(selector, "&"),
+           do: "&:is(#{selector})",
+           else: selector
 
       %{kind: :arbitrary, raw: raw, selector: selector, relative: relative}
     else
@@ -36,9 +37,14 @@ defmodule TailwindSort.Variant do
 
   defp parse_named_variant(raw, d) do
     case Text.split_top_level(raw, "/") do
-      [_, _, _ | _] -> nil
-      [base] -> try_roots(Candidate.find_roots(base, &Map.has_key?(d.variants, &1)), nil, raw, d)
-      [base, mod] -> try_roots(Candidate.find_roots(base, &Map.has_key?(d.variants, &1)), mod, raw, d)
+      [_, _, _ | _] ->
+        nil
+
+      [base] ->
+        try_roots(Candidate.find_roots(base, &Map.has_key?(d.variants, &1)), nil, raw, d)
+
+      [base, mod] ->
+        try_roots(Candidate.find_roots(base, &Map.has_key?(d.variants, &1)), mod, raw, d)
     end
   end
 
@@ -53,24 +59,39 @@ defmodule TailwindSort.Variant do
         nil
 
       {:functional, nil} ->
-        build_with_modifier(mod, &%{kind: :functional, root: root, raw: raw, value: nil, modifier: &1})
+        build_with_modifier(
+          mod,
+          &%{kind: :functional, root: root, raw: raw, value: nil, modifier: &1}
+        )
 
       {:functional, value} ->
         case parse_functional_value(value) do
-          :continue -> try_roots(rest, mod, raw, d)
-          nil -> nil
-          v -> build_with_modifier(mod, &%{kind: :functional, root: root, raw: raw, value: v, modifier: &1})
+          :continue ->
+            try_roots(rest, mod, raw, d)
+
+          nil ->
+            nil
+
+          v ->
+            build_with_modifier(
+              mod,
+              &%{kind: :functional, root: root, raw: raw, value: v, modifier: &1}
+            )
         end
 
       {:compound, nil} ->
         nil
 
       {:compound, value} ->
-        {value, mod} = if mod && root in ~w(not has in), do: {"#{value}/#{mod}", nil}, else: {value, mod}
+        {value, mod} =
+          if mod && root in ~w(not has in), do: {"#{value}/#{mod}", nil}, else: {value, mod}
 
         with sub when sub != nil <- parse_variant(value, d),
              true <- compounds_with?(root, sub, d) do
-          build_with_modifier(mod, &%{kind: :compound, root: root, raw: raw, variant: sub, modifier: &1})
+          build_with_modifier(
+            mod,
+            &%{kind: :compound, root: root, raw: raw, variant: sub, modifier: &1}
+          )
         else
           _ -> nil
         end
@@ -89,10 +110,14 @@ defmodule TailwindSort.Variant do
   defp parse_functional_value(value) do
     cond do
       String.ends_with?(value, "]") ->
-        if String.starts_with?(value, "["), do: parse_arbitrary_value(value, :arb), else: :continue
+        if String.starts_with?(value, "["),
+          do: parse_arbitrary_value(value, :arb),
+          else: :continue
 
       String.ends_with?(value, ")") ->
-        if String.starts_with?(value, "("), do: parse_arbitrary_value(value, :var), else: :continue
+        if String.starts_with?(value, "("),
+          do: parse_arbitrary_value(value, :var),
+          else: :continue
 
       Regex.match?(@named, value) ->
         {:named, value}
@@ -137,7 +162,10 @@ defmodule TailwindSort.Variant do
 
   def produces_css?(%{kind: :functional, root: root, value: value, modifier: mod}, d, _depth) do
     rules = Map.get(d.functional_variant_rules, root, %{})
-    rule_allows? = fn form -> elem(Map.get(rules, form, {false, false}), if(mod, do: 1, else: 0)) end
+
+    rule_allows? = fn form ->
+      elem(Map.get(rules, form, {false, false}), if(mod, do: 1, else: 0))
+    end
 
     case value do
       nil ->
@@ -152,8 +180,11 @@ defmodule TailwindSort.Variant do
       {:named, v} ->
         theme_hit =
           Enum.any?(rules, fn
-            {{:ns, ns}, _} = rule -> Design.theme_has_key?(d, ns, v) and rule_allows?.(elem(rule, 0))
-            _ -> false
+            {{:ns, ns}, _} = rule ->
+              Design.theme_has_key?(d, ns, v) and rule_allows?.(elem(rule, 0))
+
+            _ ->
+              false
           end)
 
         theme_hit or rule_allows?.(if Regex.match?(~r/^\d+$/, v), do: :int, else: :word)
@@ -161,14 +192,18 @@ defmodule TailwindSort.Variant do
   end
 
   # Tailwind rejects some compound chains at compile time, like group-not-hover. Probes told us which.
-  defp to_compound_chain(%{kind: :compound, root: r, variant: sub}), do: [r | to_compound_chain(sub)]
+  defp to_compound_chain(%{kind: :compound, root: r, variant: sub}),
+    do: [r | to_compound_chain(sub)]
+
   defp to_compound_chain(%{kind: :arbitrary, relative: true}), do: ["[rel]"]
   defp to_compound_chain(%{kind: :arbitrary, selector: "@" <> _}), do: ["[at]"]
   defp to_compound_chain(%{kind: :arbitrary}), do: ["[sel]"]
   defp to_compound_chain(%{root: r}), do: [r]
 
   defp chain_allowed?(chain, d) do
-    if MapSet.member?(d.custom_variants, List.last(chain)), do: true, else: Map.get(d.compound_chains, chain, true)
+    if MapSet.member?(d.custom_variants, List.last(chain)),
+      do: true,
+      else: Map.get(d.compound_chains, chain, true)
   end
 
   # ---- ordering ------------------------------------------------------------------
@@ -229,7 +264,9 @@ defmodule TailwindSort.Variant do
     end
   end
 
-  defp resolve_width(%{kind: :static, root: root}, :breakpoint, d), do: d.theme["--breakpoint-#{root}"]
+  defp resolve_width(%{kind: :static, root: root}, :breakpoint, d),
+    do: d.theme["--breakpoint-#{root}"]
+
   defp resolve_width(%{kind: :functional, modifier: m}, :breakpoint, _d) when m != nil, do: nil
   defp resolve_width(%{kind: :functional, value: nil}, _ns, _d), do: nil
 

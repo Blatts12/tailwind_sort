@@ -44,7 +44,11 @@ defmodule TailwindSort.Candidate do
   end
 
   defp parse_base(base, d) do
-    static = if MapSet.member?(d.static, base) and not String.contains?(base, "["), do: [{:static, base}], else: []
+    static =
+      if MapSet.member?(d.static, base) and not String.contains?(base, "["),
+        do: [{:static, base}],
+        else: []
+
     static ++ parse_dynamic_utility(base, d)
   end
 
@@ -53,8 +57,13 @@ defmodule TailwindSort.Candidate do
          mod_segment = List.first(mod_rest),
          {:ok, modifier} <- parse_modifier_segment(mod_segment) do
       cond do
-        String.starts_with?(base_wo_mod, "[") -> parse_arbitrary_property(base_wo_mod, modifier)
-        true -> base_wo_mod |> find_utility_roots(d) |> build_functional_parses(modifier, mod_segment, [])
+        String.starts_with?(base_wo_mod, "[") ->
+          parse_arbitrary_property(base_wo_mod, modifier)
+
+        true ->
+          base_wo_mod
+          |> find_utility_roots(d)
+          |> build_functional_parses(modifier, mod_segment, [])
       end
     else
       _ -> []
@@ -76,7 +85,8 @@ defmodule TailwindSort.Candidate do
          inner = binary_part(b, 1, byte_size(b) - 2),
          {idx, _} when idx > 0 and idx < byte_size(inner) - 1 <- :binary.match(inner, ":"),
          property = binary_part(inner, 0, idx),
-         value = Text.decode_arbitrary_value(binary_part(inner, idx + 1, byte_size(inner) - idx - 1)),
+         value =
+           Text.decode_arbitrary_value(binary_part(inner, idx + 1, byte_size(inner) - idx - 1)),
          true <- Text.valid_arbitrary_value?(value) do
       [{:arbitrary, property, value, modifier}]
     else
@@ -92,7 +102,10 @@ defmodule TailwindSort.Candidate do
         case :binary.match(b, "-[") do
           {i, _} ->
             root = binary_part(b, 0, i)
-            if root_registered?.(root), do: [{root, binary_part(b, i + 1, byte_size(b) - i - 1)}], else: []
+
+            if root_registered?.(root),
+              do: [{root, binary_part(b, i + 1, byte_size(b) - i - 1)}],
+              else: []
 
           :nomatch ->
             []
@@ -131,8 +144,13 @@ defmodule TailwindSort.Candidate do
       {start, _} ->
         if String.ends_with?(value, "]") do
           case parse_arbitrary_value(binary_part(value, start + 1, byte_size(value) - start - 2)) do
-            nil -> build_functional_parses(rest, modifier, seg, acc)
-            v -> build_functional_parses(rest, modifier, seg, [{:functional, root, v, modifier} | acc])
+            nil ->
+              build_functional_parses(rest, modifier, seg, acc)
+
+            v ->
+              build_functional_parses(rest, modifier, seg, [
+                {:functional, root, v, modifier} | acc
+              ])
           end
         else
           Enum.reverse(acc)
@@ -140,7 +158,10 @@ defmodule TailwindSort.Candidate do
 
       :nomatch ->
         if Regex.match?(@named, value),
-          do: build_functional_parses(rest, modifier, seg, [{:functional, root, {:named, value}, modifier} | acc]),
+          do:
+            build_functional_parses(rest, modifier, seg, [
+              {:functional, root, {:named, value}, modifier} | acc
+            ]),
           else: build_functional_parses(rest, modifier, seg, acc)
     end
   end
@@ -172,7 +193,9 @@ defmodule TailwindSort.Candidate do
   def parse_modifier("(" <> _ = m) do
     if String.ends_with?(m, ")") do
       inner = binary_part(m, 1, byte_size(m) - 2)
-      if String.starts_with?(inner, "--") and Text.valid_arbitrary_value?(inner), do: {:var, "var(#{inner})"}
+
+      if String.starts_with?(inner, "--") and Text.valid_arbitrary_value?(inner),
+        do: {:var, "var(#{inner})"}
     else
       parse_named_modifier(m)
     end

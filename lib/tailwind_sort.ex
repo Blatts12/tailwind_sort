@@ -64,7 +64,9 @@ defmodule TailwindSort do
 
   # ~CLS"..." holds a bare class list. We keep the surrounding whitespace because heredocs end in a newline.
   defp format_class_sigil(contents, config) do
-    [lead, classes, trail] = Regex.run(~r/\A(\s*)(.*?)(\s*)\z/s, contents, capture: :all_but_first)
+    [lead, classes, trail] =
+      Regex.run(~r/\A(\s*)(.*?)(\s*)\z/s, contents, capture: :all_but_first)
+
     lead <> Sorter.sort_class_string(classes, load_configured_design(config), config) <> trail
   end
 
@@ -89,5 +91,6 @@ defmodule TailwindSort do
     Sorter.sort_class_string(classes, load_configured_design(opts), opts)
   end
 
-  defp load_configured_design(opts), do: Design.load_design(opts[:stylesheet], Keyword.take(opts, [:icon_prefix]))
+  defp load_configured_design(opts),
+    do: Design.load_design(opts[:stylesheet], Keyword.take(opts, [:icon_prefix]))
 end

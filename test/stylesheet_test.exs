@@ -18,7 +18,12 @@ defmodule TailwindSort.StylesheetTest do
 
     assert css.prefix == "tw"
     assert css.theme == [{:reset, "--color-"}, {:set, "--color-brand.light", "#fff"}]
-    assert css.variants == [{"dark", ["&:where(.dark, .dark *)"]}, {"pointer", ["@media (pointer: fine)"]}]
+
+    assert css.variants == [
+             {"dark", ["&:where(.dark, .dark *)"]},
+             {"pointer", ["@media (pointer: fine)"]}
+           ]
+
     assert css.utilities == [{"tab-*", [{"tab-size", "--value(integer)"}]}]
   end
 end

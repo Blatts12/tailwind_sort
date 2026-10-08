@@ -13,7 +13,9 @@ defmodule TailwindSort.Utility do
   alias TailwindSort.{DataType, Design}
 
   def compute_signature({:static, name}, d) do
-    pick_min_signature([d.exact[name] && elem(d.exact[name], 0) | Map.get(d.custom_static, name, [])])
+    pick_min_signature([
+      d.exact[name] && elem(d.exact[name], 0) | Map.get(d.custom_static, name, [])
+    ])
   end
 
   def compute_signature({:arbitrary, property, _value, modifier}, d) do
@@ -31,7 +33,9 @@ defmodule TailwindSort.Utility do
     pick_min_signature([compute_core_signature(parse, d) | custom])
   end
 
-  defp custom_utility_accepts?(:icon, value, modifier, _d), do: match?({:named, _}, value) and modifier == nil
+  defp custom_utility_accepts?(:icon, value, modifier, _d),
+    do: match?({:named, _}, value) and modifier == nil
+
   defp custom_utility_accepts?(_rules, nil, _modifier, _d), do: false
 
   defp custom_utility_accepts?(rules, value, modifier, d),
