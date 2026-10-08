@@ -9,7 +9,7 @@ for f in property-order.ts utilities.ts theme.ts utils/is-color.ts; do
   curl -sfL "https://raw.githubusercontent.com/tailwindlabs/tailwindcss/v${version}/packages/tailwindcss/src/$f" -o "src/$(basename "$f")"
 done
 node --max-old-space-size=6000 extract.mjs src /tmp/tailwind_data.term
-erl -noshell -eval '{ok,T}=file:consult("/tmp/tailwind_data.term"), ok=file:write_file("../priv/tailwind_data.etf", term_to_binary(maps:from_list(T),[compressed,{minor_version,2}])), halt().'
+elixir pack_data.exs /tmp/tailwind_data.term ../priv/tailwind_data.etf
 fx=../test/fixtures
 node fixtures.mjs $fx/default.css 4000 1 $fx/fx_default.term
 node fixtures.mjs $fx/custom.css 2000 7 $fx/fx_custom.term

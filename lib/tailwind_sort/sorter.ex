@@ -11,12 +11,14 @@ defmodule TailwindSort.Sorter do
   alias TailwindSort.Utility
   alias TailwindSort.Variant
 
+  @max_cached_classes 20_000
+
   @type sort_key :: {non_neg_integer(), Utility.signature(), String.t()}
 
   @doc "Builds a sort key for each class. A nil key marks a class Tailwind doesn't generate."
   @spec build_class_order(classes :: [String.t()], Design.t()) :: %{String.t() => sort_key() | nil}
   def build_class_order(classes, d) do
-    resolved = classes |> Enum.uniq() |> Map.new(&{&1, resolve_class(&1, d)})
+    resolved = resolve_classes(Enum.uniq(classes), d)
     ranks = rank_variants(resolved, d)
 
     Map.new(resolved, fn
@@ -24,13 +26,55 @@ defmodule TailwindSort.Sorter do
         {class, nil}
 
       {class, {variants, sig}} ->
-        {class, {Enum.reduce(variants, 0, &bor(&2, 1 <<< ranks[&1.raw])), sig, class}}
+        {class, {Enum.reduce(variants, 0, &bor(&2, 1 <<< Map.fetch!(ranks, &1.raw))), sig, class}}
     end)
   end
 
-  defp resolve_class(class, d) do
+  defp resolve_classes(classes, %Design{cache_key: nil} = d), do: resolve_new_classes(classes, d)
+
+  # Mix formats each file in its own task, and a file repeats the same classes in many attributes.
+  # So we keep resolved classes in the process dictionary. Language servers reuse one process for
+  # many files, which is why the cache has a size cap.
+  defp resolve_classes(classes, d) do
+    cache =
+      case Process.get(__MODULE__) do
+        {key, cache} when key == d.cache_key and map_size(cache) < @max_cached_classes -> cache
+        _ -> %{}
+      end
+
+    case Enum.reject(classes, &is_map_key(cache, &1)) do
+      [] ->
+        Map.take(cache, classes)
+
+      missing ->
+        cache = Map.merge(cache, resolve_new_classes(missing, d))
+        Process.put(__MODULE__, {d.cache_key, cache})
+        Map.take(cache, classes)
+    end
+  end
+
+  # Many classes share a variant like `hover`, so we check each variant once per batch.
+  defp resolve_new_classes(classes, d) do
+    parsed = Map.new(classes, &{&1, parse_class(&1, d)})
+
+    for_result = for({_, {variants, _}} <- parsed, v <- variants, do: v)
+
+    produces_css =
+      for_result
+      |> Enum.uniq_by(& &1.raw)
+      |> Map.new(&{&1.raw, Variant.produces_css?(&1, d)})
+
+    Map.new(parsed, fn
+      {class, {variants, _} = resolved} ->
+        {class, if(Enum.all?(variants, &Map.fetch!(produces_css, &1.raw)), do: resolved)}
+
+      unknown ->
+        unknown
+    end)
+  end
+
+  defp parse_class(class, d) do
     with {variants, parses} <- Candidate.parse_candidate(class, d),
-         true <- Enum.all?(variants, &Variant.produces_css?(&1, d)),
          sig when sig != nil <- pick_best_signature(parses, d) do
       {variants, sig}
     else
@@ -77,24 +121,17 @@ defmodule TailwindSort.Sorter do
   def sort_class_list(classes, d, opts \\ []) do
     order = build_class_order(classes, d)
     {ellipsis, rest} = Enum.split_with(classes, &(&1 in ["...", "…"]))
-    {unknown, known} = Enum.split_with(rest, &is_nil(order[&1]))
-    known = Enum.sort(known, &(compare_sort_keys(order[&1], order[&2]) <= 0))
-    sorted = unknown ++ known ++ ellipsis
+    {unknown, known} = Enum.split_with(rest, &is_nil(Map.fetch!(order, &1)))
+    known = if Keyword.get(opts, :remove_duplicates, true), do: Enum.uniq(known), else: known
 
-    if Keyword.get(opts, :remove_duplicates, true) do
-      {kept, _} =
-        Enum.reduce(sorted, {[], MapSet.new()}, fn c, {acc, seen} ->
-          cond do
-            MapSet.member?(seen, c) -> {acc, seen}
-            order[c] == nil -> {[c | acc], seen}
-            true -> {[c | acc], MapSet.put(seen, c)}
-          end
-        end)
+    # Each key ends with its class, so we sort the keys and read the classes back out.
+    sorted_known =
+      known
+      |> Enum.map(&Map.fetch!(order, &1))
+      |> Enum.sort(&(compare_sort_keys(&1, &2) <= 0))
+      |> Enum.map(&elem(&1, 2))
 
-      {Enum.reverse(kept), length(sorted) - length(kept)}
-    else
-      {sorted, 0}
-    end
+    {unknown ++ sorted_known ++ ellipsis, length(rest) - length(unknown) - length(known)}
   end
 
   @doc """
@@ -105,43 +142,60 @@ defmodule TailwindSort.Sorter do
   """
   @spec sort_class_string(classes :: String.t(), Design.t(), keyword()) :: String.t()
   def sort_class_string(str, d, opts \\ []) do
-    parts = Regex.split(~r/[\t\r\f\n ]+/, str, include_captures: true)
-    classes = Enum.take_every(parts, 2)
-    whitespace = parts |> Enum.drop(1) |> Enum.take_every(2) |> Enum.map(fn _ -> " " end)
-    classes = if List.last(classes) == "", do: Enum.drop(classes, -1), else: classes
+    {classes, gaps} = split_classes(str)
 
-    {prefix, classes, whitespace} =
+    {prefix, classes, gaps} =
       if opts[:ignore_first] && classes != [],
-        do: {hd(classes) <> (List.first(whitespace) || ""), tl(classes), Enum.drop(whitespace, 1)},
-        else: {"", classes, whitespace}
+        do: {hd(classes) <> gap_space(gaps), tl(classes), max(gaps - 1, 0)},
+        else: {"", classes, gaps}
 
-    {suffix, classes, whitespace} =
+    {suffix, classes, gaps} =
       if opts[:ignore_last] && classes != [],
-        do: {(List.last(whitespace) || "") <> List.last(classes), Enum.drop(classes, -1), Enum.drop(whitespace, -1)},
-        else: {"", classes, whitespace}
+        do: {gap_space(gaps) <> List.last(classes), Enum.drop(classes, -1), max(gaps - 1, 0)},
+        else: {"", classes, gaps}
 
     {sorted, removed} = sort_class_list(classes, d, opts)
-    whitespace = Enum.drop(whitespace, removed)
+    trailing = if sorted != [] and gaps - removed >= length(sorted), do: " ", else: ""
 
     result =
-      sorted
-      |> Enum.with_index()
-      |> Enum.map_join(fn {c, i} -> c <> (Enum.at(whitespace, i) || "") end)
-      |> then(
-        &Regex.replace(
-          ~r/^\s+/,
-          &1,
-          if(Keyword.get(opts, :collapse_start, true), do: "", else: " ")
-        )
-      )
-      |> then(
-        &Regex.replace(
-          ~r/\s+$/,
-          &1,
-          if(Keyword.get(opts, :collapse_end, true), do: "", else: " ")
-        )
-      )
+      (Enum.join(sorted, " ") <> trailing)
+      |> replace_leading_whitespace(if(Keyword.get(opts, :collapse_start, true), do: "", else: " "))
+      |> replace_trailing_whitespace(if(Keyword.get(opts, :collapse_end, true), do: "", else: " "))
 
-    Regex.replace(~r/\s+$/, prefix, " ") <> result <> Regex.replace(~r/^\s+/, suffix, " ")
+    replace_trailing_whitespace(prefix, " ") <> result <> replace_leading_whitespace(suffix, " ")
+  end
+
+  # Mirrors the split in prettier-plugin-tailwindcss. Leading whitespace leaves an empty first class,
+  # which is unknown and so stays in front. `gaps` counts the whitespace runs, and each run becomes one space.
+  defp split_classes(""), do: {[], 0}
+
+  defp split_classes(str) do
+    parts = :binary.split(str, [" ", "\t", "\r", "\f", "\n"], [:global])
+    classes = Enum.reject(parts, &(&1 == ""))
+    lead = if hd(parts) == "", do: 1, else: 0
+    trail = if List.last(parts) == "", do: 1, else: 0
+
+    case classes do
+      [] -> {[""], 1}
+      _ when lead == 1 -> {["" | classes], length(classes) + trail}
+      _ -> {classes, length(classes) - 1 + trail}
+    end
+  end
+
+  defp gap_space(0), do: ""
+  defp gap_space(_), do: " "
+
+  defp replace_leading_whitespace(str, replacement) do
+    case Text.trim_leading_whitespace(str) do
+      ^str -> str
+      trimmed -> replacement <> trimmed
+    end
+  end
+
+  defp replace_trailing_whitespace(str, replacement) do
+    case Text.trim_trailing_whitespace(str) do
+      ^str -> str
+      trimmed -> trimmed <> replacement
+    end
   end
 end

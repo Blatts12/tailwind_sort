@@ -46,6 +46,9 @@ npm-debug.log
 /scripts/src
 /scripts/.fixture-input.css
 
+# Saved benchmark runs
+/bench/*.benchee
+
 # Temporary files
 *.log
 /tmp/

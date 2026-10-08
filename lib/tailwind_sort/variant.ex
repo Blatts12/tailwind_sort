@@ -7,8 +7,6 @@ defmodule TailwindSort.Variant do
   alias TailwindSort.Design
   alias TailwindSort.Text
 
-  @named ~r/^[a-zA-Z0-9_.%-]+$/
-
   @type t :: %{
           required(:kind) => :static | :functional | :compound | :arbitrary,
           required(:raw) => String.t(),
@@ -128,7 +126,7 @@ defmodule TailwindSort.Variant do
           do: parse_arbitrary_value(value, :var),
           else: :continue
 
-      Regex.match?(@named, value) ->
+      Text.named_value?(value) ->
         {:named, value}
 
       true ->
@@ -199,7 +197,7 @@ defmodule TailwindSort.Variant do
               false
           end)
 
-        theme_hit or rule_allows?.(if Regex.match?(~r/^\d+$/, v), do: :int, else: :word)
+        theme_hit or rule_allows?.(if Text.digits?(v), do: :int, else: :word)
     end
   end
 
@@ -307,7 +305,7 @@ defmodule TailwindSort.Variant do
 
   defp to_unit_bucket(v) do
     case :binary.match(v, "(") do
-      :nomatch -> String.replace(v, ~r/[\d.]+/, "")
+      :nomatch -> for <<c <- v>>, c not in ?0..?9 and c != ?., into: "", do: <<c>>
       {i, _} -> binary_part(v, 0, i)
     end
   end

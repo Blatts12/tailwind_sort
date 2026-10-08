@@ -4,54 +4,45 @@ defmodule TailwindSort.Text do
 
   @doc "Splits `input` on a top-level separator. Separators inside (), [], {} and quotes don't count."
   @spec split_top_level(input :: String.t(), separator :: <<_::8>>) :: [String.t()]
-  def split_top_level(input, <<sep>>), do: scan_segments(input, sep, [], [], [])
+  def split_top_level(input, <<sep>>), do: scan_segments(input, input, sep, 0, 0, [], [])
 
-  defp scan_segments(<<>>, _sep, _st, cur, parts), do: Enum.reverse([build_segment(cur) | parts])
+  # `i` is the byte offset of `rest` in `input`.
+  defp scan_segments(<<>>, input, _sep, i, start, _st, parts),
+    do: Enum.reverse([binary_part(input, start, i - start) | parts])
 
-  defp scan_segments(<<c, rest::binary>>, sep, [], cur, parts) when c == sep,
-    do: scan_segments(rest, sep, [], [], [build_segment(cur) | parts])
+  defp scan_segments(<<c, rest::binary>>, input, sep, i, start, [], parts) when c == sep,
+    do: scan_segments(rest, input, sep, i + 1, i + 1, [], [binary_part(input, start, i - start) | parts])
 
-  defp scan_segments(<<?\\, n, rest::binary>>, sep, st, cur, parts),
-    do: scan_segments(rest, sep, st, [n, ?\\ | cur], parts)
+  defp scan_segments(<<?\\, _, rest::binary>>, input, sep, i, start, st, parts),
+    do: scan_segments(rest, input, sep, i + 2, start, st, parts)
 
-  defp scan_segments(<<?\\>>, sep, st, cur, parts), do: scan_segments(<<>>, sep, st, [?\\ | cur], parts)
+  defp scan_segments(<<?\\>>, input, sep, i, start, st, parts),
+    do: scan_segments(<<>>, input, sep, i + 1, start, st, parts)
 
-  defp scan_segments(<<q, rest::binary>>, sep, st, cur, parts) when q in [?", ?'] do
-    {str, rest} = take_quoted_string(rest, q, [q])
-    scan_segments(rest, sep, st, [str | cur], parts)
+  defp scan_segments(<<q, rest::binary>>, input, sep, i, start, st, parts) when q in [?", ?'] do
+    after_quote = skip_quoted_string(rest, q)
+    i = i + 1 + byte_size(rest) - byte_size(after_quote)
+    scan_segments(after_quote, input, sep, i, start, st, parts)
   end
 
-  defp scan_segments(<<c, rest::binary>>, sep, st, cur, parts) when c in [?(, ?[, ?{],
-    do: scan_segments(rest, sep, [to_closing_bracket(c) | st], [c | cur], parts)
+  defp scan_segments(<<c, rest::binary>>, input, sep, i, start, st, parts) when c in [?(, ?[, ?{],
+    do: scan_segments(rest, input, sep, i + 1, start, [to_closing_bracket(c) | st], parts)
 
-  defp scan_segments(<<c, rest::binary>>, sep, [c | st], cur, parts) when c in [?), ?], ?}],
-    do: scan_segments(rest, sep, st, [c | cur], parts)
+  defp scan_segments(<<c, rest::binary>>, input, sep, i, start, [c | st], parts) when c in [?), ?], ?}],
+    do: scan_segments(rest, input, sep, i + 1, start, st, parts)
 
-  defp scan_segments(<<c, rest::binary>>, sep, st, cur, parts), do: scan_segments(rest, sep, st, [c | cur], parts)
+  defp scan_segments(<<_, rest::binary>>, input, sep, i, start, st, parts),
+    do: scan_segments(rest, input, sep, i + 1, start, st, parts)
 
   defp to_closing_bracket(?(), do: ?)
   defp to_closing_bracket(?[), do: ?]
   defp to_closing_bracket(?{), do: ?}
 
-  # Returns `{chunk, rest}`. The chunk includes the closing quote when the string has one.
-  defp take_quoted_string(<<?\\, n, rest::binary>>, q, acc), do: take_quoted_string(rest, q, [acc, ?\\, n])
-
-  defp take_quoted_string(<<q, rest::binary>>, q, acc), do: {wrap_chunk([acc, q]), rest}
-  defp take_quoted_string(<<c, rest::binary>>, q, acc), do: take_quoted_string(rest, q, [acc, c])
-  defp take_quoted_string(<<>>, _q, acc), do: {wrap_chunk(acc), <<>>}
-
-  # `cur` is a reversed list, so we push the whole string as one element. Reversing keeps it intact.
-  defp wrap_chunk(iodata), do: {:chunk, IO.iodata_to_binary(iodata)}
-
-  defp build_segment(cur) do
-    cur
-    |> Enum.reverse()
-    |> Enum.map(fn
-      {:chunk, b} -> b
-      c -> c
-    end)
-    |> IO.iodata_to_binary()
-  end
+  # Returns what follows the closing quote, or `<<>>` when the string never closes.
+  defp skip_quoted_string(<<?\\, _, rest::binary>>, q), do: skip_quoted_string(rest, q)
+  defp skip_quoted_string(<<q, rest::binary>>, q), do: rest
+  defp skip_quoted_string(<<_, rest::binary>>, q), do: skip_quoted_string(rest, q)
+  defp skip_quoted_string(<<>>, _q), do: <<>>
 
   @doc "Port of isValidArbitrary. Brackets must balance, and a top-level `;` makes the value invalid."
   @spec valid_arbitrary_value?(value :: String.t()) :: boolean()
@@ -61,10 +52,8 @@ defmodule TailwindSort.Text do
   defp scan_arbitrary_value(<<?\\, _, rest::binary>>, st), do: scan_arbitrary_value(rest, st)
   defp scan_arbitrary_value(<<?\\>>, _st), do: true
 
-  defp scan_arbitrary_value(<<q, rest::binary>>, st) when q in [?", ?'] do
-    {_, rest} = take_quoted_string(rest, q, [])
-    scan_arbitrary_value(rest, st)
-  end
+  defp scan_arbitrary_value(<<q, rest::binary>>, st) when q in [?", ?'],
+    do: scan_arbitrary_value(skip_quoted_string(rest, q), st)
 
   defp scan_arbitrary_value(<<?(, rest::binary>>, st), do: scan_arbitrary_value(rest, [?) | st])
   defp scan_arbitrary_value(<<?[, rest::binary>>, st), do: scan_arbitrary_value(rest, [?] | st])
@@ -88,45 +77,72 @@ defmodule TailwindSort.Text do
 
   defp decode_function_calls(<<>>, acc), do: acc |> Enum.reverse() |> IO.iodata_to_binary()
 
+  # A run of name bytes is a function name when `(` follows it. Otherwise no suffix of the run
+  # can be one either, so we copy the whole run and move on.
   defp decode_function_calls(input, acc) do
-    case Regex.run(~r/^([a-zA-Z0-9_-]*)\(/, input) do
-      [whole, name] ->
-        {inner, rest} =
-          take_balanced_parens(
-            binary_part(input, byte_size(whole), byte_size(input) - byte_size(whole)),
-            1,
-            []
+    {name, rest} = take_function_name(input, 0)
+
+    case rest do
+      "(" <> after_paren ->
+        decode_function_call(name, after_paren, acc)
+
+      _ when name != "" ->
+        decode_function_calls(rest, [replace_underscores(name, false) | acc])
+
+      _ ->
+        {plain, rest} = take_plain_bytes(rest, 0)
+        decode_function_calls(rest, [plain | acc])
+    end
+  end
+
+  defp take_function_name(input, i) do
+    case input do
+      <<_::binary-size(^i), c, _::binary>>
+      when c in ?a..?z or c in ?A..?Z or c in ?0..?9 or c in [?_, ?-] ->
+        take_function_name(input, i + 1)
+
+      <<name::binary-size(^i), rest::binary>> ->
+        {name, rest}
+    end
+  end
+
+  # Bytes that can't start a function name or call. None of them is `_`, so they need no decoding.
+  defp take_plain_bytes(input, i) do
+    case input do
+      <<_::binary-size(^i), c, _::binary>>
+      when c not in ?a..?z and c not in ?A..?Z and c not in ?0..?9 and c not in [?_, ?-, ?(] ->
+        take_plain_bytes(input, i + 1)
+
+      <<plain::binary-size(^i), rest::binary>> ->
+        {plain, rest}
+    end
+  end
+
+  defp decode_function_call(name, input, acc) do
+    {inner, rest} = take_balanced_parens(input, 1, [])
+
+    decoded_inner =
+      cond do
+        name == "url" or String.ends_with?(name, "_url") ->
+          inner
+
+        name in ["var", "theme"] or String.ends_with?(name, "_var") or
+            String.ends_with?(name, "_theme") ->
+          [first | others] = split_top_level(inner, ",")
+
+          Enum.join(
+            [
+              replace_underscores(first, true)
+              | Enum.map(others, &decode_arbitrary_value/1)
+            ],
+            ","
           )
 
-        decoded_inner =
-          cond do
-            name == "url" or String.ends_with?(name, "_url") ->
-              inner
+        true ->
+          decode_arbitrary_value(inner)
+      end
 
-            name in ["var", "theme"] or String.ends_with?(name, "_var") or
-                String.ends_with?(name, "_theme") ->
-              [first | others] = split_top_level(inner, ",")
-
-              Enum.join(
-                [
-                  replace_underscores(first, true)
-                  | Enum.map(others, &decode_arbitrary_value/1)
-                ],
-                ","
-              )
-
-            true ->
-              decode_arbitrary_value(inner)
-          end
-
-        decode_function_calls(rest, [
-          [replace_underscores(name, false), "(", decoded_inner, ")"] | acc
-        ])
-
-      nil ->
-        <<c::utf8, rest::binary>> = input
-        decode_function_calls(rest, [replace_underscores(<<c::utf8>>, false) | acc])
-    end
+    decode_function_calls(rest, [[replace_underscores(name, false), "(", decoded_inner, ")"] | acc])
   end
 
   # Returns `{inner, rest}`. `inner` drops the closing paren and `rest` starts right after it.
@@ -141,11 +157,57 @@ defmodule TailwindSort.Text do
   defp take_balanced_parens(<<c, rest::binary>>, d, acc), do: take_balanced_parens(rest, d, [c | acc])
 
   defp replace_underscores(input, keep_underscores?) do
-    String.replace(input, ~r/\\_|_/, fn
-      "\\_" -> "_"
-      "_" -> if keep_underscores?, do: "_", else: " "
-    end)
+    if String.contains?(input, "_"),
+      do: replace_underscore_bytes(input, if(keep_underscores?, do: ?_, else: ?\s), []),
+      else: input
   end
+
+  defp replace_underscore_bytes(<<>>, _space, acc), do: acc |> Enum.reverse() |> IO.iodata_to_binary()
+
+  defp replace_underscore_bytes(<<?\\, ?_, rest::binary>>, space, acc),
+    do: replace_underscore_bytes(rest, space, [?_ | acc])
+
+  defp replace_underscore_bytes(<<?_, rest::binary>>, space, acc),
+    do: replace_underscore_bytes(rest, space, [space | acc])
+
+  defp replace_underscore_bytes(<<c, rest::binary>>, space, acc), do: replace_underscore_bytes(rest, space, [c | acc])
+
+  @doc "Same as matching `^\\d+$`."
+  @spec digits?(String.t()) :: boolean()
+  def digits?(<<c, rest::binary>>) when c in ?0..?9, do: rest == "" or digits?(rest)
+  def digits?(_), do: false
+
+  @doc "Same as matching `^\\d*\\.\\d+$`."
+  @spec decimal?(String.t()) :: boolean()
+  def decimal?(str) do
+    case :binary.split(str, ".") do
+      [int, frac] -> (int == "" or digits?(int)) and digits?(frac)
+      _ -> false
+    end
+  end
+
+  @doc "Same as matching `^[a-zA-Z0-9_.%-]+$`."
+  @spec named_value?(String.t()) :: boolean()
+  def named_value?(<<c, rest::binary>>) when c in ?a..?z or c in ?A..?Z or c in ?0..?9 or c in [?_, ?., ?%, ?-],
+    do: rest == "" or named_value?(rest)
+
+  def named_value?(_), do: false
+
+  @doc "Matches the bytes that `\\s` matches in a regex."
+  defguard is_whitespace(c) when c in [?\s, ?\t, ?\n, ?\v, ?\f, ?\r]
+
+  @spec trim_leading_whitespace(String.t()) :: String.t()
+  def trim_leading_whitespace(<<c, rest::binary>>) when is_whitespace(c), do: trim_leading_whitespace(rest)
+  def trim_leading_whitespace(str), do: str
+
+  @spec trim_trailing_whitespace(String.t()) :: String.t()
+  def trim_trailing_whitespace(str), do: binary_part(str, 0, find_trailing_whitespace_start(str, byte_size(str)))
+
+  defp find_trailing_whitespace_start(str, i) when i > 0 do
+    if is_whitespace(:binary.at(str, i - 1)), do: find_trailing_whitespace_start(str, i - 1), else: i
+  end
+
+  defp find_trailing_whitespace_start(_str, 0), do: 0
 
   @doc "Port of utils/compare.ts. It compares strings byte by byte, but compares runs of digits as numbers."
   @spec compare_alnum(String.t(), String.t()) :: integer()
@@ -174,8 +236,9 @@ defmodule TailwindSort.Text do
 
   defp digit_char?(c), do: c >= ?0 and c <= ?9
 
-  defp take_digit_run(s, i) do
-    [run] = Regex.run(~r/^\d+/, binary_part(s, i, byte_size(s) - i))
-    run
+  defp take_digit_run(s, i), do: binary_part(s, i, find_digit_run_end(s, i) - i)
+
+  defp find_digit_run_end(s, i) do
+    if i < byte_size(s) and digit_char?(:binary.at(s, i)), do: find_digit_run_end(s, i + 1), else: i
   end
 end

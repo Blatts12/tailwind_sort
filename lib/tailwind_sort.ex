@@ -53,8 +53,13 @@ defmodule TailwindSort do
   # Multi-letter sigils like ~HOLO and ~CLS arrived in Elixir 1.15. Older versions reject the key.
   @sigils if Version.match?(System.version(), ">= 1.15.0"), do: [:H, :HOLO, :CLS], else: [:H]
 
+  # Mix calls this in the main process before it formats files in parallel. Loading the design here
+  # spares every format task from building its own copy on a cold cache.
   @impl Format
-  def features(_opts), do: [sigils: @sigils, extensions: [".heex", ".holo"]]
+  def features(opts) do
+    opts |> Keyword.get(:tailwind_sort, []) |> load_configured_design()
+    [sigils: @sigils, extensions: [".heex", ".holo"]]
+  end
 
   @impl Format
   def format(contents, opts) do

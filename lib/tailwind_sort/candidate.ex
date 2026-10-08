@@ -6,8 +6,6 @@ defmodule TailwindSort.Candidate do
   alias TailwindSort.Text
   alias TailwindSort.Variant
 
-  @named ~r/^[a-zA-Z0-9_.%-]+$/
-
   @type modifier :: {:named | :arbitrary | :var, String.t()} | nil
   @type value :: {:named, String.t()} | {:arbitrary, String.t() | nil, String.t()} | nil
 
@@ -166,7 +164,7 @@ defmodule TailwindSort.Candidate do
         end
 
       :nomatch ->
-        if Regex.match?(@named, value),
+        if Text.named_value?(value),
           do:
             build_functional_parses(rest, modifier, seg, [
               {:functional, root, {:named, value}, modifier} | acc
@@ -180,14 +178,17 @@ defmodule TailwindSort.Candidate do
 
     if Text.valid_arbitrary_value?(v) do
       {hint, v} =
-        case Regex.run(~r/^([a-z-]*):(.*)$/s, v) do
-          [_, hint, rest] -> {hint, rest}
-          nil -> {nil, v}
+        case :binary.split(v, ":") do
+          [hint, rest] -> if type_hint?(hint), do: {hint, rest}, else: {nil, v}
+          [_] -> {nil, v}
         end
 
       if hint == "" or String.trim(v) == "", do: nil, else: {:arbitrary, hint, v}
     end
   end
+
+  defp type_hint?(<<c, rest::binary>>) when c in ?a..?z or c == ?-, do: type_hint?(rest)
+  defp type_hint?(rest), do: rest == ""
 
   @doc "Port of parseModifier. Returns `{:named, v}`, `{:arbitrary, v}`, `{:var, v}` or nil."
   @spec parse_modifier(modifier :: String.t()) :: modifier()
@@ -213,7 +214,7 @@ defmodule TailwindSort.Candidate do
 
   def parse_modifier(m), do: parse_named_modifier(m)
 
-  defp parse_named_modifier(m), do: if(Regex.match?(@named, m), do: {:named, m})
+  defp parse_named_modifier(m), do: if(Text.named_value?(m), do: {:named, m})
 
   @doc "Port of findRoots. Returns every `{root, value}` split where `root` is registered."
   @spec find_roots(input :: String.t(), root_exists? :: (String.t() -> boolean())) :: [{String.t(), String.t() | nil}]

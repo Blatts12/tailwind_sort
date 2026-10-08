@@ -20,6 +20,7 @@ defmodule TailwindSort.Design do
     :functional,
     :ns_priority,
     :modifiers,
+    :modifier_tables,
     :corpus_by_types,
     :hints,
     :variants,
@@ -30,7 +31,8 @@ defmodule TailwindSort.Design do
     :compound_chains,
     :custom_variants,
     :keywords,
-    :ignored_theme_keys
+    :ignored_theme_keys,
+    :cache_key
   ]
 
   @type t :: %__MODULE__{}
@@ -44,22 +46,24 @@ defmodule TailwindSort.Design do
 
   @doc """
   Loads the design for a stylesheet path, or the default theme when the path is nil.
-  We cache the result per path, mtime and options.
+  We cache one design per path and options, and rebuild it when the file's mtime changes.
 
   The only option is `:icon_prefix`. It defaults to `"hero-"`, and `nil` turns icon classes off.
   """
   @spec load_design(Path.t() | nil, keyword()) :: t()
   def load_design(stylesheet \\ nil, opts \\ []) do
     icon_prefix = Keyword.get(opts, :icon_prefix, @default_icon_prefix)
-    key = {__MODULE__, stylesheet && Path.expand(stylesheet), read_mtime(stylesheet), icon_prefix}
+    key = {__MODULE__, stylesheet && Path.expand(stylesheet), icon_prefix}
+    mtime = read_mtime(stylesheet)
 
     case :persistent_term.get(key, nil) do
-      nil ->
-        design = build_design(Stylesheet.read_stylesheet(stylesheet), icon_prefix: icon_prefix)
-        :persistent_term.put(key, design)
+      {^mtime, design} ->
         design
 
-      design ->
+      _ ->
+        design = build_design(Stylesheet.read_stylesheet(stylesheet), icon_prefix: icon_prefix)
+        design = %{design | cache_key: {key, mtime}}
+        :persistent_term.put(key, {mtime, design})
         design
     end
   end
@@ -120,6 +124,7 @@ defmodule TailwindSort.Design do
         functional: d.functional,
         ns_priority: d.ns_priority,
         modifiers: d.modifiers,
+        modifier_tables: d.modifier_tables,
         corpus_by_types: corpus_by_types,
         hints: MapSet.new(d.hints),
         functional_variant_rules: d.functional_variant_rules,

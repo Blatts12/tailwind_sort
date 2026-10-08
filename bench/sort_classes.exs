@@ -1,4 +1,5 @@
 # mix run bench/sort_classes.exs
+# BENCH_TAG=baseline mix run bench/sort_classes.exs saves a run for later runs to compare against
 
 button =
   "hover:bg-gray-50 text-sm px-4 flex shadow-sm rounded-lg focus-visible:ring-2 items-center bg-white font-medium py-2 text-gray-900"
@@ -38,16 +39,33 @@ utilities =
 :rand.seed(:exsss, {1, 2, 3})
 huge = Enum.join(Enum.shuffle(for(v <- variants, u <- utilities, do: "#{v}:#{u}") ++ utilities ++ utilities), " ")
 
+save_or_load =
+  case System.get_env("BENCH_TAG") do
+    nil -> [load: "bench/sort_classes.benchee"]
+    tag -> [save: [path: "bench/sort_classes.benchee", tag: tag]]
+  end
+
+# Repeated calls in one process hit the class cache, so "cold cache" clears it before each run
 Benchee.run(
-  %{"sort_classes" => &TailwindSort.sort_classes/1},
-  inputs: %{
-    "normal: button (12 classes)" => button,
-    "normal: card (31 classes)" => card,
-    "extreme: stacked variants" => stacked_variants,
-    "extreme: arbitrary values" => arbitrary_values,
-    "extreme: 425 classes with duplicates" => huge
+  %{
+    "sort_classes" => &TailwindSort.sort_classes/1,
+    "sort_classes, cold cache" =>
+      {&TailwindSort.sort_classes/1,
+       before_each: fn input ->
+         Process.delete(TailwindSort.Sorter)
+         input
+       end}
   },
-  warmup: 1,
-  time: 3,
-  memory_time: 1
+  [
+    inputs: %{
+      "normal: button (12 classes)" => button,
+      "normal: card (31 classes)" => card,
+      "extreme: stacked variants" => stacked_variants,
+      "extreme: arbitrary values" => arbitrary_values,
+      "extreme: 425 classes with duplicates" => huge
+    },
+    warmup: 1,
+    time: 3,
+    memory_time: 1
+  ] ++ save_or_load
 )

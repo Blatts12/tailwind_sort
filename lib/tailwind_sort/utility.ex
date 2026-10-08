@@ -8,11 +8,13 @@ defmodule TailwindSort.Utility do
   #   * `functional` holds the result for each kind of value, per root. The kinds are bare numbers,
   #     a key in some theme namespace, arbitrary values grouped by inferred data type, and hints.
   #   * `modifiers` holds the effect of each kind of modifier, per root, value group and signature.
+  #     It points into `modifier_tables` by index, because many groups share the same table.
   @moduledoc false
 
   alias TailwindSort.Candidate
   alias TailwindSort.DataType
   alias TailwindSort.Design
+  alias TailwindSort.Text
 
   @type signature :: {[non_neg_integer()], non_neg_integer()}
 
@@ -51,9 +53,9 @@ defmodule TailwindSort.Utility do
     v in rules.literal or Enum.any?(rules.ns, &Design.theme_has_key?(d, &1, v)) or
       Enum.any?(rules.bare, fn
         "any" -> true
-        "integer" -> Regex.match?(~r/^\d+$/, v)
-        "number" -> quarter_multiple?(v) or Regex.match?(~r/^\d+$/, v)
-        "percentage" -> Regex.match?(~r/^\d+%$/, v)
+        "integer" -> Text.digits?(v)
+        "number" -> quarter_multiple?(v) or Text.digits?(v)
+        "percentage" -> percent_value?(v, &Text.digits?/1)
         "ratio" -> false
       end)
   end
@@ -114,14 +116,16 @@ defmodule TailwindSort.Utility do
 
   defp to_value_group(v, d) do
     cond do
-      Regex.match?(~r/^\d+$/, v) -> :int
-      Regex.match?(~r/^\d*\.\d+$/, v) -> if(quarter_multiple?(v), do: :dec25, else: :dec)
-      Regex.match?(~r/^\d+%$/, v) -> :pct
-      Regex.match?(~r/^\d*\.\d+%$/, v) -> :pctdec
+      Text.digits?(v) -> :int
+      Text.decimal?(v) -> if(quarter_multiple?(v), do: :dec25, else: :dec)
+      percent_value?(v, &Text.digits?/1) -> :pct
+      percent_value?(v, &Text.decimal?/1) -> :pctdec
       MapSet.member?(d.keywords, v) -> {:kw, v}
       true -> :word
     end
   end
+
+  defp percent_value?(v, number?), do: String.ends_with?(v, "%") and number?.(binary_part(v, 0, byte_size(v) - 1))
 
   # Port of isValidSpacingMultiplier. The value must be a multiple of 0.25, written the way JS prints numbers.
   defp quarter_multiple?(v) do
@@ -143,7 +147,12 @@ defmodule TailwindSort.Utility do
   defp apply_modifier(sig, _root, _group, nil, _d, _overrides), do: sig
 
   defp apply_modifier(sig, root, group, modifier, d, overrides) do
-    table = Map.get(d.modifiers, {root, group, sig}, %{})
+    table =
+      case d.modifiers do
+        %{{^root, ^group, ^sig} => i} -> elem(d.modifier_tables, i)
+        _ -> %{}
+      end
+
     mclass = classify_modifier(modifier, Map.merge(table, overrides || %{}), d)
 
     result =
@@ -167,8 +176,8 @@ defmodule TailwindSort.Utility do
 
     cond do
       ns -> ns
-      Regex.match?(~r/^\d+$/, m) -> :int
-      Regex.match?(~r/^\d*\.\d+$/, m) -> if(quarter_multiple?(m), do: :dec25, else: :dec)
+      Text.digits?(m) -> :int
+      Text.decimal?(m) -> if(quarter_multiple?(m), do: :dec25, else: :dec)
       true -> :word
     end
   end
@@ -193,7 +202,7 @@ defmodule TailwindSort.Utility do
   end
 
   defp modifier_ok_for_color?(nil), do: true
-  defp modifier_ok_for_color?({:named, m}), do: Regex.match?(~r/^\d*\.?\d+$/, m)
+  defp modifier_ok_for_color?({:named, m}), do: Text.digits?(m) or Text.decimal?(m)
   defp modifier_ok_for_color?(_), do: true
 
   @doc "Port of the per-rule comparator in compile.ts. It leaves out variants and the class name."

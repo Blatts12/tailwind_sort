@@ -10,6 +10,7 @@ defmodule TailwindSort.Template do
 
   alias TailwindSort.Design
   alias TailwindSort.Sorter
+  alias TailwindSort.Text
 
   @spec sort_class_attributes(template :: String.t(), Design.t(), keyword()) :: String.t()
   def sort_class_attributes(src, design, opts) do
@@ -224,8 +225,8 @@ defmodule TailwindSort.Template do
         opts =
           ctx.sort_opts ++
             [
-              ignore_first: i > 0 and not Regex.match?(~r/^\s/, old),
-              ignore_last: i < last and not Regex.match?(~r/\s$/, old),
+              ignore_first: i > 0 and Text.trim_leading_whitespace(old) == old,
+              ignore_last: i < last and Text.trim_trailing_whitespace(old) == old,
               collapse_start: i == 0,
               collapse_end: i == last
             ]
