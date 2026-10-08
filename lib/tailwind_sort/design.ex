@@ -1,9 +1,11 @@
 defmodule TailwindSort.Design do
-  @moduledoc false
   # Runtime view of a Tailwind design system. It merges the generated data in
   # priv/tailwind_data.etf with whatever your stylesheet adds.
+  @moduledoc false
 
-  alias TailwindSort.{DataType, Stylesheet, Text}
+  alias TailwindSort.DataType
+  alias TailwindSort.Stylesheet
+  alias TailwindSort.Text
 
   defstruct [
     :version,
@@ -66,7 +68,8 @@ defmodule TailwindSort.Design do
     case :persistent_term.get(@data_key, nil) do
       nil ->
         data =
-          :code.priv_dir(:tailwind_sort)
+          :tailwind_sort
+          |> :code.priv_dir()
           |> Path.join("tailwind_data.etf")
           |> File.read!()
           |> :erlang.binary_to_term()
@@ -98,30 +101,33 @@ defmodule TailwindSort.Design do
     custom_functional =
       put_icon_root(custom_functional, Keyword.get(opts, :icon_prefix), property_index)
 
-    %__MODULE__{
-      version: d.version,
-      prefix: css.prefix,
-      theme: theme,
-      property_index: property_index,
-      named_colors: named_colors,
-      static: MapSet.new(d.static_utilities ++ Map.keys(custom_static)),
-      functional_roots: MapSet.new(d.functional_roots ++ Map.keys(custom_functional)),
-      exact: d.exact,
-      exact_modifiers: d.exact_modifiers,
-      functional: d.functional,
-      ns_priority: d.ns_priority,
-      modifiers: d.modifiers,
-      corpus_by_types: corpus_by_types,
-      hints: MapSet.new(d.hints),
-      functional_variant_rules: d.functional_variant_rules,
-      custom_static: custom_static,
-      custom_functional: custom_functional,
-      compound_chains: d.compound_chains,
-      keywords: MapSet.new(d.keywords),
-      ignored_theme_keys: d.ignored_theme_keys,
-      custom_variants: MapSet.new(css.variants, &elem(&1, 0))
-    }
-    |> put_variants(d, css.variants)
+    put_variants(
+      %__MODULE__{
+        version: d.version,
+        prefix: css.prefix,
+        theme: theme,
+        property_index: property_index,
+        named_colors: named_colors,
+        static: MapSet.new(d.static_utilities ++ Map.keys(custom_static)),
+        functional_roots: MapSet.new(d.functional_roots ++ Map.keys(custom_functional)),
+        exact: d.exact,
+        exact_modifiers: d.exact_modifiers,
+        functional: d.functional,
+        ns_priority: d.ns_priority,
+        modifiers: d.modifiers,
+        corpus_by_types: corpus_by_types,
+        hints: MapSet.new(d.hints),
+        functional_variant_rules: d.functional_variant_rules,
+        custom_static: custom_static,
+        custom_functional: custom_functional,
+        compound_chains: d.compound_chains,
+        keywords: MapSet.new(d.keywords),
+        ignored_theme_keys: d.ignored_theme_keys,
+        custom_variants: MapSet.new(css.variants, &elem(&1, 0))
+      },
+      d,
+      css.variants
+    )
   end
 
   # `--ns-*: initial` clears a namespace, as in Theme#clearNamespace. Keys owned by a more
@@ -240,8 +246,7 @@ defmodule TailwindSort.Design do
     %{
       any_value: args == [],
       modifier: String.contains?(body, "--modifier("),
-      ns:
-        for("--" <> _ = a <- args, String.ends_with?(a, "-*"), do: String.trim_trailing(a, "-*")),
+      ns: for("--" <> _ = a <- args, String.ends_with?(a, "-*"), do: String.trim_trailing(a, "-*")),
       bare: for(a <- args, a in ~w(integer number percentage ratio any), do: a),
       literal: for(<<q, _::binary>> = a <- args, q in [?", ?'], do: String.slice(a, 1..-2//1)),
       arbitrary: for("[" <> _ = a <- args, do: String.slice(a, 1..-2//1))

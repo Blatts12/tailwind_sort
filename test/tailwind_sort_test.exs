@@ -1,5 +1,6 @@
 defmodule TailwindSortTest do
   use ExUnit.Case, async: true
+
   doctest TailwindSort
 
   defp format_heex(src), do: TailwindSort.format(src, extension: ".heex")
@@ -36,9 +37,7 @@ defmodule TailwindSortTest do
     test "hero- icons sort by the CSS the heroicons plugin emits" do
       assert TailwindSort.sort_classes("size-4 hero-x-mark mr-2") == "mr-2 hero-x-mark size-4"
 
-      assert TailwindSort.sort_classes(
-               "hero-x-mark-mini size-4 text-zinc-500 ml-1 shrink-0 animate-spin"
-             ) ==
+      assert TailwindSort.sort_classes("hero-x-mark-mini size-4 text-zinc-500 ml-1 shrink-0 animate-spin") ==
                "ml-1 hero-x-mark-mini size-4 shrink-0 animate-spin text-zinc-500"
     end
 
@@ -73,9 +72,7 @@ defmodule TailwindSortTest do
     end
 
     test "sorts string literals inside class={...}, keeping interpolation in place" do
-      assert format_heex(
-               ~S|<.btn class={["p-4 flex", @on && "px-2 bg-red-500", "mt-#{@n} p-2 flex"]} />|
-             ) ==
+      assert format_heex(~S|<.btn class={["p-4 flex", @on && "px-2 bg-red-500", "mt-#{@n} p-2 flex"]} />|) ==
                ~S|<.btn class={["flex p-4", @on && "bg-red-500 px-2", "mt-#{@n} flex p-2"]} />|
     end
 
@@ -105,8 +102,7 @@ defmodule TailwindSortTest do
   end
 
   describe "~CLS sigil" do
-    defp format_cls(src, config \\ []),
-      do: TailwindSort.format(src, sigil: :CLS, tailwind_sort: config)
+    defp format_cls(src, config \\ []), do: TailwindSort.format(src, sigil: :CLS, tailwind_sort: config)
 
     test "sorts the class list" do
       assert format_cls("p-4 flex border-red-500 border") == "flex border border-red-500 p-4"

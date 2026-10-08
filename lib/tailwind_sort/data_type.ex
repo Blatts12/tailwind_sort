@@ -41,11 +41,7 @@ defmodule TailwindSort.DataType do
   defp type_matches?("bg-size", v, _), do: bg_size_value?(v)
 
   defp type_matches?("line-width", v, _),
-    do:
-      Enum.all?(
-        Text.split_top_level(v, " "),
-        &(length_value?(&1) or number_value?(&1) or &1 in ~w(thin medium thick))
-      )
+    do: Enum.all?(Text.split_top_level(v, " "), &(length_value?(&1) or number_value?(&1) or &1 in ~w(thin medium thick)))
 
   defp type_matches?("image", v, _), do: image_value?(v)
   defp type_matches?("family-name", v, _), do: family_name_value?(v)
@@ -57,19 +53,14 @@ defmodule TailwindSort.DataType do
 
   def color_value?(<<?#, _::binary>>, _), do: true
 
-  def color_value?(v, named),
-    do: Regex.match?(@color_fn, v) or MapSet.member?(named, String.downcase(v))
+  def color_value?(v, named), do: Regex.match?(@color_fn, v) or MapSet.member?(named, String.downcase(v))
 
-  defp math_function_call?(v),
-    do: String.contains?(v, "(") and Enum.any?(@math_fns, &String.contains?(v, &1 <> "("))
+  defp math_function_call?(v), do: String.contains?(v, "(") and Enum.any?(@math_fns, &String.contains?(v, &1 <> "("))
 
   defp number_value?(v), do: Regex.match?(@is_number, v) or math_function_call?(v)
   defp percentage_value?(v), do: Regex.match?(@is_percentage, v) or math_function_call?(v)
 
-  defp length_value?(v),
-    do:
-      Regex.match?(@is_length, v) or Regex.match?(~r/^(--spacing)\(/i, v) or
-        math_function_call?(v)
+  defp length_value?(v), do: Regex.match?(@is_length, v) or Regex.match?(~r/^(--spacing)\(/i, v) or math_function_call?(v)
 
   defp url_value?(v), do: Regex.match?(~r/^url\(.*\)$/s, v)
 

@@ -1,5 +1,6 @@
 defmodule TailwindSort.StylesheetTest do
   use ExUnit.Case, async: true
+
   alias TailwindSort.Stylesheet
 
   test "reads theme, resets, custom variants, utilities and prefix" do

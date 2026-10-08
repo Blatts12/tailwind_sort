@@ -1,5 +1,4 @@
 defmodule TailwindSort.Utility do
-  @moduledoc false
   # Resolves a parsed base utility to its property sort, `{property_indices, declaration_count}`.
   # That's what Tailwind's getPropertySort computes from the generated CSS. We return nil when
   # Tailwind would generate nothing. The answers come from data generated against the real
@@ -9,8 +8,10 @@ defmodule TailwindSort.Utility do
   #   * `functional` holds the result for each kind of value, per root. The kinds are bare numbers,
   #     a key in some theme namespace, arbitrary values grouped by inferred data type, and hints.
   #   * `modifiers` holds the effect of each kind of modifier, per root, value group and signature.
+  @moduledoc false
 
-  alias TailwindSort.{DataType, Design}
+  alias TailwindSort.DataType
+  alias TailwindSort.Design
 
   def compute_signature({:static, name}, d) do
     pick_min_signature([
@@ -33,8 +34,7 @@ defmodule TailwindSort.Utility do
     pick_min_signature([compute_core_signature(parse, d) | custom])
   end
 
-  defp custom_utility_accepts?(:icon, value, modifier, _d),
-    do: match?({:named, _}, value) and modifier == nil
+  defp custom_utility_accepts?(:icon, value, modifier, _d), do: match?({:named, _}, value) and modifier == nil
 
   defp custom_utility_accepts?(_rules, nil, _modifier, _d), do: false
 
@@ -69,7 +69,7 @@ defmodule TailwindSort.Utility do
     case d.exact[key] do
       {sig, deps} ->
         if deps == [] or Enum.any?(deps, &Map.has_key?(d.theme, &1)) do
-          group = if deps != [], do: :theme, else: to_value_group(v, d)
+          group = if deps == [], do: to_value_group(v, d), else: :theme
           apply_modifier(sig, root, group, modifier, d, Map.get(d.exact_modifiers, key))
         else
           lookup_named_value(root, v, modifier, d)

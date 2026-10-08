@@ -3,7 +3,8 @@ defmodule TailwindSort.DifferentialTest do
   # prettier-plugin-tailwindcss against the real Tailwind design system.
   use ExUnit.Case, async: true
 
-  alias TailwindSort.{Design, Sorter}
+  alias TailwindSort.Design
+  alias TailwindSort.Sorter
 
   for {name, css} <- [
         default: nil,

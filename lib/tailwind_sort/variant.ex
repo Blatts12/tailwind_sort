@@ -1,9 +1,11 @@
 defmodule TailwindSort.Variant do
-  @moduledoc false
   # Port of parseVariant from candidate.ts, Variants#compare and compoundsWith from variants.ts,
   # and compareBreakpoints from utils/compare-breakpoints.ts.
+  @moduledoc false
 
-  alias TailwindSort.{Candidate, Design, Text}
+  alias TailwindSort.Candidate
+  alias TailwindSort.Design
+  alias TailwindSort.Text
 
   @named ~r/^[a-zA-Z0-9_.%-]+$/
 
@@ -184,6 +186,7 @@ defmodule TailwindSort.Variant do
               Design.theme_has_key?(d, ns, v) and rule_allows?.(elem(rule, 0))
 
             _ ->
+              # ---- ordering ------------------------------------------------------------------
               false
           end)
 
@@ -192,8 +195,7 @@ defmodule TailwindSort.Variant do
   end
 
   # Tailwind rejects some compound chains at compile time, like group-not-hover. Probes told us which.
-  defp to_compound_chain(%{kind: :compound, root: r, variant: sub}),
-    do: [r | to_compound_chain(sub)]
+  defp to_compound_chain(%{kind: :compound, root: r, variant: sub}), do: [r | to_compound_chain(sub)]
 
   defp to_compound_chain(%{kind: :arbitrary, relative: true}), do: ["[rel]"]
   defp to_compound_chain(%{kind: :arbitrary, selector: "@" <> _}), do: ["[at]"]
@@ -205,8 +207,6 @@ defmodule TailwindSort.Variant do
       do: true,
       else: Map.get(d.compound_chains, chain, true)
   end
-
-  # ---- ordering ------------------------------------------------------------------
 
   @doc "Port of Variants#compare. The raw string is the identity, because Tailwind caches variants by it."
   def compare_variants(%{raw: r}, %{raw: r}, _d), do: 0
@@ -264,8 +264,7 @@ defmodule TailwindSort.Variant do
     end
   end
 
-  defp resolve_width(%{kind: :static, root: root}, :breakpoint, d),
-    do: d.theme["--breakpoint-#{root}"]
+  defp resolve_width(%{kind: :static, root: root}, :breakpoint, d), do: d.theme["--breakpoint-#{root}"]
 
   defp resolve_width(%{kind: :functional, modifier: m}, :breakpoint, _d) when m != nil, do: nil
   defp resolve_width(%{kind: :functional, value: nil}, _ns, _d), do: nil

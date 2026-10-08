@@ -1,10 +1,14 @@
 defmodule TailwindSort.Sorter do
-  @moduledoc false
   # Port of getClassOrder from sort.ts and compile.ts, plus the list handling of
   # prettier-plugin-tailwindcss. Unknown classes go first, `...` goes last, and known duplicates go away.
+  @moduledoc false
 
   import Bitwise
-  alias TailwindSort.{Candidate, Text, Utility, Variant}
+
+  alias TailwindSort.Candidate
+  alias TailwindSort.Text
+  alias TailwindSort.Utility
+  alias TailwindSort.Variant
 
   @doc "Builds a sort key for each class. A nil key marks a class Tailwind doesn't generate."
   def build_class_order(classes, d) do
@@ -39,8 +43,10 @@ defmodule TailwindSort.Sorter do
 
   # Port of getVariantOrder. We sort every variant in use, and variants that compare equal share a bit.
   defp rank_variants(resolved, d) do
+    for_result = for({_, {vs, _}} <- resolved, v <- vs, do: v)
+
     sorted =
-      for({_, {vs, _}} <- resolved, v <- vs, do: v)
+      for_result
       |> Enum.uniq_by(& &1.raw)
       |> Enum.sort(&(Variant.compare_variants(&1, &2, d) <= 0))
 
@@ -93,21 +99,18 @@ defmodule TailwindSort.Sorter do
   """
   def sort_class_string(str, d, opts \\ []) do
     parts = Regex.split(~r/[\t\r\f\n ]+/, str, include_captures: true)
-    classes = parts |> Enum.take_every(2)
+    classes = Enum.take_every(parts, 2)
     whitespace = parts |> Enum.drop(1) |> Enum.take_every(2) |> Enum.map(fn _ -> " " end)
     classes = if List.last(classes) == "", do: Enum.drop(classes, -1), else: classes
 
     {prefix, classes, whitespace} =
       if opts[:ignore_first] && classes != [],
-        do:
-          {hd(classes) <> (List.first(whitespace) || ""), tl(classes), Enum.drop(whitespace, 1)},
+        do: {hd(classes) <> (List.first(whitespace) || ""), tl(classes), Enum.drop(whitespace, 1)},
         else: {"", classes, whitespace}
 
     {suffix, classes, whitespace} =
       if opts[:ignore_last] && classes != [],
-        do:
-          {(List.last(whitespace) || "") <> List.last(classes), Enum.drop(classes, -1),
-           Enum.drop(whitespace, -1)},
+        do: {(List.last(whitespace) || "") <> List.last(classes), Enum.drop(classes, -1), Enum.drop(whitespace, -1)},
         else: {"", classes, whitespace}
 
     {sorted, removed} = sort_class_list(classes, d, opts)
@@ -116,8 +119,7 @@ defmodule TailwindSort.Sorter do
     result =
       sorted
       |> Enum.with_index()
-      |> Enum.map(fn {c, i} -> c <> (Enum.at(whitespace, i) || "") end)
-      |> Enum.join()
+      |> Enum.map_join(fn {c, i} -> c <> (Enum.at(whitespace, i) || "") end)
       |> then(
         &Regex.replace(
           ~r/^\s+/,

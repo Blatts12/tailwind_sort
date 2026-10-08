@@ -31,8 +31,7 @@ defmodule TailwindSort.Template do
     fn name -> MapSet.member?(names, name) or Enum.any?(regexes, &Regex.match?(&1, name)) end
   end
 
-  defp apply_edits(src, [], pos, acc),
-    do: IO.iodata_to_binary([acc, binary_part(src, pos, byte_size(src) - pos)])
+  defp apply_edits(src, [], pos, acc), do: IO.iodata_to_binary([acc, binary_part(src, pos, byte_size(src) - pos)])
 
   defp apply_edits(src, [{start, stop, new} | rest], pos, acc),
     do: apply_edits(src, rest, stop, [acc, binary_part(src, pos, start - pos), new])
@@ -183,8 +182,7 @@ defmodule TailwindSort.Template do
   end
 
   # Returns the chunks in order. Each one is `{:static, start, stop}` or `{:dynamic, start, stop}`.
-  defp scan_quoted_value(src, pos, _q, _interp, _start, _chunks) when pos >= byte_size(src),
-    do: :error
+  defp scan_quoted_value(src, pos, _q, _interp, _start, _chunks) when pos >= byte_size(src), do: :error
 
   defp scan_quoted_value(src, pos, q, interp, start, chunks) do
     case :binary.at(src, pos) do

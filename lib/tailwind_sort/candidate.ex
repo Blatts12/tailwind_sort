@@ -1,8 +1,9 @@
 defmodule TailwindSort.Candidate do
-  @moduledoc false
   # Port of parseCandidate, findRoots and parseModifier from tailwindcss/src/candidate.ts.
+  @moduledoc false
 
-  alias TailwindSort.{Text, Variant}
+  alias TailwindSort.Text
+  alias TailwindSort.Variant
 
   @named ~r/^[a-zA-Z0-9_.%-]+$/
 
@@ -56,14 +57,12 @@ defmodule TailwindSort.Candidate do
     with [base_wo_mod | mod_rest] when length(mod_rest) <= 1 <- Text.split_top_level(base, "/"),
          mod_segment = List.first(mod_rest),
          {:ok, modifier} <- parse_modifier_segment(mod_segment) do
-      cond do
-        String.starts_with?(base_wo_mod, "[") ->
-          parse_arbitrary_property(base_wo_mod, modifier)
-
-        true ->
-          base_wo_mod
-          |> find_utility_roots(d)
-          |> build_functional_parses(modifier, mod_segment, [])
+      if String.starts_with?(base_wo_mod, "[") do
+        parse_arbitrary_property(base_wo_mod, modifier)
+      else
+        base_wo_mod
+        |> find_utility_roots(d)
+        |> build_functional_parses(modifier, mod_segment, [])
       end
     else
       _ -> []
@@ -231,6 +230,6 @@ defmodule TailwindSort.Candidate do
         do: [{"@", binary_part(input, 1, byte_size(input) - 1)}],
         else: []
 
-    whole ++ Enum.reverse(splits) ++ at
+    whole ++ Enum.reverse(splits, at)
   end
 end

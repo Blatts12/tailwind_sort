@@ -16,7 +16,8 @@ defmodule TailwindSort.Stylesheet do
   def parse_stylesheet(css) do
     nodes = css |> strip_comments() |> parse_css()
 
-    walk_nodes(nodes, %__MODULE__{})
+    nodes
+    |> walk_nodes(%__MODULE__{})
     |> Map.update!(:theme, &Enum.reverse/1)
     |> Map.update!(:variants, &Enum.reverse/1)
     |> Map.update!(:utilities, &Enum.reverse/1)
@@ -110,8 +111,7 @@ defmodule TailwindSort.Stylesheet do
   defp walk_bfs([], next, acc), do: walk_bfs(Enum.reverse(next), [], acc)
   defp walk_bfs([{:decl, p, v} | rest], next, acc), do: walk_bfs(rest, next, [{p, v} | acc])
 
-  defp walk_bfs([{:block, _, kids} | rest], next, acc),
-    do: walk_bfs(rest, Enum.reverse(kids, next), acc)
+  defp walk_bfs([{:block, _, kids} | rest], next, acc), do: walk_bfs(rest, Enum.reverse(kids, next), acc)
 
   defp walk_bfs([_ | rest], next, acc), do: walk_bfs(rest, next, acc)
 
@@ -154,8 +154,7 @@ defmodule TailwindSort.Stylesheet do
         case :binary.split(text, ":") do
           [p, v] ->
             [
-              {:decl, String.trim(p),
-               v |> String.trim() |> String.replace(~r/\s*!important$/, "")}
+              {:decl, String.trim(p), v |> String.trim() |> String.replace(~r/\s*!important$/, "")}
               | acc
             ]
 
@@ -173,11 +172,9 @@ defmodule TailwindSort.Stylesheet do
   defp scan_next_token(<<?;, rest::binary>>, buf, 0), do: {:semi, IO.iodata_to_binary(buf), rest}
   defp scan_next_token(<<?(, rest::binary>>, buf, d), do: scan_next_token(rest, [buf, ?(], d + 1)
 
-  defp scan_next_token(<<?), rest::binary>>, buf, d),
-    do: scan_next_token(rest, [buf, ?)], max(d - 1, 0))
+  defp scan_next_token(<<?), rest::binary>>, buf, d), do: scan_next_token(rest, [buf, ?)], max(d - 1, 0))
 
-  defp scan_next_token(<<?\\, c, rest::binary>>, buf, d),
-    do: scan_next_token(rest, [buf, ?\\, c], d)
+  defp scan_next_token(<<?\\, c, rest::binary>>, buf, d), do: scan_next_token(rest, [buf, ?\\, c], d)
 
   defp scan_next_token(<<q, rest::binary>>, buf, d) when q in [?", ?'] do
     {str, rest} = take_quoted(rest, q, [q])
