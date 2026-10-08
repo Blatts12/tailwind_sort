@@ -1,6 +1,10 @@
 defmodule TailwindSort.Text do
-  @moduledoc false
-  # Ports of segment.ts, is-valid-arbitrary.ts and decode-arbitrary-value.ts from tailwindcss/src/utils.
+  @moduledoc """
+  String helpers that most other modules lean on to read class names the way Tailwind does.
+
+  These are ports of `segment.ts`, `is-valid-arbitrary.ts` and `decode-arbitrary-value.ts`
+  from `tailwindcss/src/utils`.
+  """
 
   @doc "Splits `input` on a top-level separator. Separators inside (), [], {} and quotes don't count."
   @spec split_top_level(input :: String.t(), separator :: <<_::8>>) :: [String.t()]

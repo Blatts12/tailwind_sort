@@ -41,6 +41,8 @@ npm-debug.log
 .bak
 *~
 
+/internal/
+
 # Scripts
 /scripts/node_modules
 /scripts/src

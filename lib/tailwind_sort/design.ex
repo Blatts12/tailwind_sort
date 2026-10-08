@@ -1,7 +1,10 @@
 defmodule TailwindSort.Design do
-  # Runtime view of a Tailwind design system. It merges the generated data in
-  # priv/tailwind_data.etf with whatever your stylesheet adds.
-  @moduledoc false
+  @moduledoc """
+  Holds everything the sorter needs to know about your Tailwind design system.
+
+  It merges the generated data in `priv/tailwind_data.etf` with whatever your stylesheet adds,
+  like theme keys, custom variants and custom utilities.
+  """
 
   alias TailwindSort.DataType
   alias TailwindSort.Stylesheet

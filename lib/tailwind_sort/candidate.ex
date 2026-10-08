@@ -1,6 +1,10 @@
 defmodule TailwindSort.Candidate do
-  # Port of parseCandidate, findRoots and parseModifier from tailwindcss/src/candidate.ts.
-  @moduledoc false
+  @moduledoc """
+  Splits a class like `md:hover:bg-red-500/50` into its variants and its base utility.
+
+  This is a port of `parseCandidate`, `findRoots` and `parseModifier` from
+  `tailwindcss/src/candidate.ts`. A class Tailwind would reject parses to `nil`.
+  """
 
   alias TailwindSort.Design
   alias TailwindSort.Text

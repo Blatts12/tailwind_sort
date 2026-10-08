@@ -1,7 +1,11 @@
 defmodule TailwindSort.Sorter do
-  # Port of getClassOrder from sort.ts and compile.ts, plus the list handling of
-  # prettier-plugin-tailwindcss. Unknown classes go first, `...` goes last, and known duplicates go away.
-  @moduledoc false
+  @moduledoc """
+  Puts a list of classes in the order Tailwind would emit their CSS.
+
+  This is a port of `getClassOrder` from `sort.ts` and `compile.ts`, plus the list handling of
+  `prettier-plugin-tailwindcss`. Unknown classes go first, `...` goes last, and known
+  duplicates go away.
+  """
 
   import Bitwise
 

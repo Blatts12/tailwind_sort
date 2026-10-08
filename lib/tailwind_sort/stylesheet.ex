@@ -1,9 +1,11 @@
 defmodule TailwindSort.Stylesheet do
-  @moduledoc false
-  # Reads the parts of a Tailwind v4 entry stylesheet that change class order. Those are
-  # `@theme` variables, `@custom-variant`, `@utility` and `prefix(...)`.
-  # We follow local imports like `@import "./file.css"`, but not package imports.
-  # JS plugins (`@plugin`) and `@config` aren't supported.
+  @moduledoc """
+  Reads the parts of your Tailwind v4 entry stylesheet that change class order.
+
+  Those are `@theme` variables, `@custom-variant`, `@utility` and `prefix(...)`. We follow
+  local imports like `@import "./file.css"`, but not package imports. JS plugins (`@plugin`)
+  and `@config` aren't supported.
+  """
 
   defstruct prefix: nil, theme: [], variants: [], utilities: []
 
@@ -52,8 +54,6 @@ defmodule TailwindSort.Stylesheet do
   end
 
   defp strip_comments(css), do: Regex.replace(~r{/\*.*?\*/}s, css, "")
-
-  # ---- walk ------------------------------------------------------------------
 
   defp walk_nodes(nodes, acc), do: Enum.reduce(nodes, acc, &collect_node/2)
 
@@ -126,8 +126,6 @@ defmodule TailwindSort.Stylesheet do
   defp walk_bfs([{:block, _, kids} | rest], next, acc), do: walk_bfs(rest, Enum.reverse(kids, next), acc)
 
   defp walk_bfs([_ | rest], next, acc), do: walk_bfs(rest, next, acc)
-
-  # ---- tiny CSS parser ----------------------------------------------------------
 
   @doc false
   @spec parse_css(css :: String.t()) :: [css_node()]

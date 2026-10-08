@@ -1,7 +1,10 @@
 defmodule TailwindSort.Variant do
-  # Port of parseVariant from candidate.ts, Variants#compare and compoundsWith from variants.ts,
-  # and compareBreakpoints from utils/compare-breakpoints.ts.
-  @moduledoc false
+  @moduledoc """
+  Parses variants like `hover:` or `md:` and decides which one sorts first.
+
+  This is a port of `parseVariant` from `candidate.ts`, `Variants#compare` and `compoundsWith`
+  from `variants.ts`, and `compareBreakpoints` from `utils/compare-breakpoints.ts`.
+  """
 
   alias TailwindSort.Candidate
   alias TailwindSort.Design
@@ -193,7 +196,6 @@ defmodule TailwindSort.Variant do
               Design.theme_has_key?(d, ns, v) and rule_allows?.(elem(rule, 0))
 
             _ ->
-              # ---- ordering ------------------------------------------------------------------
               false
           end)
 

@@ -1,15 +1,21 @@
 defmodule TailwindSort.Utility do
-  # Resolves a parsed base utility to its property sort, `{property_indices, declaration_count}`.
-  # That's what Tailwind's getPropertySort computes from the generated CSS. We return nil when
-  # Tailwind would generate nothing. The answers come from data generated against the real
-  # design system:
-  #
-  #   * `exact` holds every class from getClassList(), like "text-lg", plus the theme vars it uses.
-  #   * `functional` holds the result for each kind of value, per root. The kinds are bare numbers,
-  #     a key in some theme namespace, arbitrary values grouped by inferred data type, and hints.
-  #   * `modifiers` holds the effect of each kind of modifier, per root, value group and signature.
-  #     It points into `modifier_tables` by index, because many groups share the same table.
-  @moduledoc false
+  @moduledoc """
+  Works out where a base utility like `text-lg` lands in Tailwind's CSS order.
+
+  It resolves a parsed utility to its property sort, `{property_indices, declaration_count}`.
+  That's what Tailwind's `getPropertySort` computes from the generated CSS. We return `nil`
+  when Tailwind would generate nothing. The answers come from data generated against the real
+  design system:
+
+    * `exact` holds every class from `getClassList()`, like `"text-lg"`, plus the theme vars it
+      uses.
+    * `functional` holds the result for each kind of value, per root. The kinds are bare
+      numbers, a key in some theme namespace, arbitrary values grouped by inferred data type,
+      and hints.
+    * `modifiers` holds the effect of each kind of modifier, per root, value group and
+      signature. It points into `modifier_tables` by index, because many groups share the same
+      table.
+  """
 
   alias TailwindSort.Candidate
   alias TailwindSort.DataType

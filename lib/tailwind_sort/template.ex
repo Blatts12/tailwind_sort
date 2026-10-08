@@ -1,12 +1,14 @@
 defmodule TailwindSort.Template do
-  @moduledoc false
-  # Finds class attributes in HEEx and Hologram templates and sorts them in place.
-  # Only the attribute contents change. Everything else comes back byte for byte.
-  #
-  #   class="..."           We sort the whole value.
-  #   class={...}           We sort every Elixir string literal inside. `#{}` splits a literal
-  #                         into chunks, and we sort each chunk around the interpolation.
-  #   class="a {@b} c"      Same chunking, for Hologram only (`interpolate_quoted: true`).
+  @moduledoc ~S"""
+  Finds class attributes in HEEx and Hologram templates and sorts them in place.
+
+  Only the attribute contents change. Everything else comes back untouched.
+
+    * `class="..."` sorts the whole value.
+    * `class={...}` sorts every Elixir string literal inside. `#{}` splits a literal into
+      chunks, and we sort each chunk around the interpolation.
+    * `class="a {@b} c"` uses the same chunking, for Hologram only (`interpolate_quoted: true`).
+  """
 
   alias TailwindSort.Design
   alias TailwindSort.Sorter
@@ -38,8 +40,6 @@ defmodule TailwindSort.Template do
 
   defp apply_edits(src, [{start, stop, new} | rest], pos, acc),
     do: apply_edits(src, rest, stop, [acc, binary_part(src, pos, start - pos), new])
-
-  # ---- text ---------------------------------------------------------------------
 
   defp scan_text(src, pos, _ctx, edits) when pos >= byte_size(src), do: edits
 
@@ -79,8 +79,6 @@ defmodule TailwindSort.Template do
       :nomatch -> byte_size(src)
     end
   end
-
-  # ---- tags ---------------------------------------------------------------------
 
   defp scan_tag(src, pos, ctx, edits) do
     {name, pos} = take_bytes_while(src, pos, &(&1 not in ~c" \t\r\n/>"))
@@ -240,7 +238,6 @@ defmodule TailwindSort.Template do
     end)
   end
 
-  # ---- Elixir expressions ---------------------------------------------------------
   # Scans an Elixir expression from just after an opening `{` to the matching `}`.
   # Returns `{:ok, pos_after_brace, string_literals}`, where each literal is a chunk list.
 
@@ -348,8 +345,6 @@ defmodule TailwindSort.Template do
       _ -> skip_delimited(src, pos + 1, close)
     end
   end
-
-  # ---- helpers -------------------------------------------------------------------
 
   defp word_char?(c), do: c in ?a..?z or c in ?A..?Z or c in ?0..?9 or c == ?_
 

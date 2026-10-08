@@ -1,8 +1,11 @@
 defmodule TailwindSort.DataType do
-  @moduledoc false
-  # Port of tailwindcss/src/utils/infer-data-type.ts. Tailwind asks for the first matching type
-  # from a list. We return the full set of matching types instead, and the generated data maps
-  # that set to how each utility behaves.
+  @moduledoc """
+  Guesses the CSS data types of an arbitrary value, like `[12px]` or `[#fff]`.
+
+  This is a port of `tailwindcss/src/utils/infer-data-type.ts`, with one change. Tailwind asks
+  for the first matching type from a list. We return the full set of matching types instead,
+  and the generated data maps that set to how each utility behaves.
+  """
 
   alias TailwindSort.Text
 
