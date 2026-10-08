@@ -20,11 +20,15 @@ defmodule TailwindSort.MixProject do
   def application, do: [extra_applications: [:logger]]
 
   defp aliases do
-    [ci: ["format", "doctor", "credo", "dialyzer", "cmd mix test"]]
+    [
+      ci: ["format", "doctor", "credo", "dialyzer", "cmd mix test"],
+      bench: "run bench/sort_classes.exs"
+    ]
   end
 
   defp deps do
     [
+      {:benchee, "~> 1.0", only: :dev},
       {:doctor, "~> 0.23.0", only: :dev},
       {:credo, "~> 1.6", only: [:dev, :test], runtime: false},
       {:styler, "~> 1.0", only: [:dev, :test], runtime: false},
