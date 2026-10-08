@@ -10,9 +10,13 @@ defmodule TailwindSort.Utility do
   #   * `modifiers` holds the effect of each kind of modifier, per root, value group and signature.
   @moduledoc false
 
+  alias TailwindSort.Candidate
   alias TailwindSort.DataType
   alias TailwindSort.Design
 
+  @type signature :: {[non_neg_integer()], non_neg_integer()}
+
+  @spec compute_signature(Candidate.parse(), Design.t()) :: signature() | nil
   def compute_signature({:static, name}, d) do
     pick_min_signature([
       d.exact[name] && elem(d.exact[name], 0) | Map.get(d.custom_static, name, [])
@@ -193,6 +197,7 @@ defmodule TailwindSort.Utility do
   defp modifier_ok_for_color?(_), do: true
 
   @doc "Port of the per-rule comparator in compile.ts. It leaves out variants and the class name."
+  @spec compare_signatures(signature(), signature()) :: integer()
   def compare_signatures({ao, ac}, {zo, zc}) do
     case find_first_diff(ao, zo) do
       0 -> zc - ac

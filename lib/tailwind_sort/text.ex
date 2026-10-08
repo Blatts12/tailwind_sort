@@ -3,6 +3,7 @@ defmodule TailwindSort.Text do
   # Ports of segment.ts, is-valid-arbitrary.ts and decode-arbitrary-value.ts from tailwindcss/src/utils.
 
   @doc "Splits `input` on a top-level separator. Separators inside (), [], {} and quotes don't count."
+  @spec split_top_level(input :: String.t(), separator :: <<_::8>>) :: [String.t()]
   def split_top_level(input, <<sep>>), do: scan_segments(input, sep, [], [], [])
 
   defp scan_segments(<<>>, _sep, _st, cur, parts), do: Enum.reverse([build_segment(cur) | parts])
@@ -53,6 +54,7 @@ defmodule TailwindSort.Text do
   end
 
   @doc "Port of isValidArbitrary. Brackets must balance, and a top-level `;` makes the value invalid."
+  @spec valid_arbitrary_value?(value :: String.t()) :: boolean()
   def valid_arbitrary_value?(input), do: scan_arbitrary_value(input, [])
 
   defp scan_arbitrary_value(<<>>, _st), do: true
@@ -77,6 +79,7 @@ defmodule TailwindSort.Text do
   The contents of `url(...)` stay as written. The first argument of `var(...)` or `theme(...)`
   keeps its underscores.
   """
+  @spec decode_arbitrary_value(value :: String.t()) :: String.t()
   def decode_arbitrary_value(input) do
     if String.contains?(input, "("),
       do: decode_function_calls(input, []),
@@ -145,6 +148,7 @@ defmodule TailwindSort.Text do
   end
 
   @doc "Port of utils/compare.ts. It compares strings byte by byte, but compares runs of digits as numbers."
+  @spec compare_alnum(String.t(), String.t()) :: integer()
   def compare_alnum(a, z), do: compare_alnum_from(a, z, 0, min(byte_size(a), byte_size(z)))
 
   defp compare_alnum_from(a, z, i, min) when i >= min, do: byte_size(a) - byte_size(z)

@@ -8,8 +8,10 @@ defmodule TailwindSort.Template do
   #                         into chunks, and we sort each chunk around the interpolation.
   #   class="a {@b} c"      Same chunking, for Hologram only (`interpolate_quoted: true`).
 
+  alias TailwindSort.Design
   alias TailwindSort.Sorter
 
+  @spec sort_class_attributes(template :: String.t(), Design.t(), keyword()) :: String.t()
   def sort_class_attributes(src, design, opts) do
     ctx = %{
       d: design,

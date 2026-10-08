@@ -22,6 +22,7 @@ defmodule TailwindSort.DataType do
   @types ~w(color length percentage ratio number integer url position bg-size line-width image family-name generic-name absolute-size relative-size angle vector)
 
   @doc "Returns the set of data types `value` satisfies. A `var(...)` value skips inference and returns `:var`."
+  @spec infer_types(value :: String.t(), named_colors :: MapSet.t(String.t())) :: MapSet.t(String.t()) | :var
   def infer_types(value, named_colors) do
     if String.starts_with?(value, "var(") do
       :var
@@ -51,6 +52,7 @@ defmodule TailwindSort.DataType do
   defp type_matches?("angle", v, _), do: Regex.match?(@is_angle, v)
   defp type_matches?("vector", v, _), do: Regex.match?(@is_vector, v)
 
+  @spec color_value?(value :: String.t(), named_colors :: MapSet.t(String.t())) :: boolean()
   def color_value?(<<?#, _::binary>>, _), do: true
 
   def color_value?(v, named), do: Regex.match?(@color_fn, v) or MapSet.member?(named, String.downcase(v))

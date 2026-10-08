@@ -2,15 +2,25 @@ defmodule TailwindSort.Candidate do
   # Port of parseCandidate, findRoots and parseModifier from tailwindcss/src/candidate.ts.
   @moduledoc false
 
+  alias TailwindSort.Design
   alias TailwindSort.Text
   alias TailwindSort.Variant
 
   @named ~r/^[a-zA-Z0-9_.%-]+$/
 
+  @type modifier :: {:named | :arbitrary | :var, String.t()} | nil
+  @type value :: {:named, String.t()} | {:arbitrary, String.t() | nil, String.t()} | nil
+
+  @type parse ::
+          {:static, String.t()}
+          | {:arbitrary, String.t(), String.t(), modifier()}
+          | {:functional, String.t(), value(), modifier()}
+
   @doc """
   Returns `{variants, parses}`, or nil when Tailwind rejects the class. `parses` lists every
   possible base utility. Tailwind tries each one and keeps all that compile.
   """
+  @spec parse_candidate(class :: String.t(), Design.t()) :: {[Variant.t()], [parse(), ...]} | nil
   def parse_candidate(raw, d) do
     with {:ok, segments} <- strip_prefix(Text.split_top_level(raw, ":"), d.prefix),
          {base, raw_variants} = List.pop_at(segments, -1),
@@ -24,7 +34,7 @@ defmodule TailwindSort.Candidate do
   end
 
   defp strip_prefix(segments, nil), do: {:ok, segments}
-  defp strip_prefix([prefix, _ | _] = segs, prefix), do: {:ok, tl(segs)}
+  defp strip_prefix([prefix, _ | _] = segments, prefix), do: {:ok, tl(segments)}
   defp strip_prefix(_, _), do: :error
 
   defp parse_variants(raws, d) do
@@ -180,6 +190,7 @@ defmodule TailwindSort.Candidate do
   end
 
   @doc "Port of parseModifier. Returns `{:named, v}`, `{:arbitrary, v}`, `{:var, v}` or nil."
+  @spec parse_modifier(modifier :: String.t()) :: modifier()
   def parse_modifier("[" <> _ = m) do
     if String.ends_with?(m, "]") do
       v = Text.decode_arbitrary_value(binary_part(m, 1, byte_size(m) - 2))
@@ -205,6 +216,7 @@ defmodule TailwindSort.Candidate do
   defp parse_named_modifier(m), do: if(Regex.match?(@named, m), do: {:named, m})
 
   @doc "Port of findRoots. Returns every `{root, value}` split where `root` is registered."
+  @spec find_roots(input :: String.t(), root_exists? :: (String.t() -> boolean())) :: [{String.t(), String.t() | nil}]
   def find_roots(input, root_exists?) do
     whole = if root_exists?.(input), do: [{input, nil}], else: []
 

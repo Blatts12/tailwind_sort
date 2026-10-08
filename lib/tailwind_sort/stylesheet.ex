@@ -7,12 +7,24 @@ defmodule TailwindSort.Stylesheet do
 
   defstruct prefix: nil, theme: [], variants: [], utilities: []
 
+  @type t :: %__MODULE__{
+          prefix: String.t() | nil,
+          theme: [{:set, String.t(), String.t()} | {:reset, String.t()}],
+          variants: [{String.t(), [String.t()]}],
+          utilities: [{String.t(), [{String.t(), String.t()}]}]
+        }
+
+  @type css_node ::
+          {:at, String.t()} | {:decl, String.t(), String.t()} | {:block, String.t(), [css_node()]}
+
+  @spec read_stylesheet(Path.t() | nil) :: t()
   def read_stylesheet(nil), do: %__MODULE__{}
 
   def read_stylesheet(path) do
     path |> load_css_with_imports([]) |> parse_stylesheet()
   end
 
+  @spec parse_stylesheet(css :: String.t()) :: t()
   def parse_stylesheet(css) do
     nodes = css |> strip_comments() |> parse_css()
 
@@ -118,6 +130,7 @@ defmodule TailwindSort.Stylesheet do
   # ---- tiny CSS parser ----------------------------------------------------------
 
   @doc false
+  @spec parse_css(css :: String.t()) :: [css_node()]
   def parse_css(css) do
     {nodes, _} = parse_nodes(css, [])
     nodes

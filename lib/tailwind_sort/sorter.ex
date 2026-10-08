@@ -6,11 +6,15 @@ defmodule TailwindSort.Sorter do
   import Bitwise
 
   alias TailwindSort.Candidate
+  alias TailwindSort.Design
   alias TailwindSort.Text
   alias TailwindSort.Utility
   alias TailwindSort.Variant
 
+  @type sort_key :: {non_neg_integer(), Utility.signature(), String.t()}
+
   @doc "Builds a sort key for each class. A nil key marks a class Tailwind doesn't generate."
+  @spec build_class_order(classes :: [String.t()], Design.t()) :: %{String.t() => sort_key() | nil}
   def build_class_order(classes, d) do
     resolved = classes |> Enum.uniq() |> Map.new(&{&1, resolve_class(&1, d)})
     ranks = rank_variants(resolved, d)
@@ -59,6 +63,7 @@ defmodule TailwindSort.Sorter do
     ranks
   end
 
+  @spec compare_sort_keys(sort_key(), sort_key()) :: integer()
   def compare_sort_keys({ab, as, an}, {zb, zs, zn}) do
     cond do
       ab != zb -> ab - zb
@@ -68,6 +73,7 @@ defmodule TailwindSort.Sorter do
   end
 
   @doc "Sorts a list of classes the way prettier-plugin-tailwindcss does. Returns `{sorted, removed_count}`."
+  @spec sort_class_list(classes :: [String.t()], Design.t(), keyword()) :: {[String.t()], non_neg_integer()}
   def sort_class_list(classes, d, opts \\ []) do
     order = build_class_order(classes, d)
     {ellipsis, rest} = Enum.split_with(classes, &(&1 in ["...", "…"]))
@@ -97,6 +103,7 @@ defmodule TailwindSort.Sorter do
   `:ignore_first` and `:ignore_last` keep the first or last token in place, because it's glued to
   an interpolation. `:collapse_start` and `:collapse_end` trim leading or trailing whitespace.
   """
+  @spec sort_class_string(classes :: String.t(), Design.t(), keyword()) :: String.t()
   def sort_class_string(str, d, opts \\ []) do
     parts = Regex.split(~r/[\t\r\f\n ]+/, str, include_captures: true)
     classes = Enum.take_every(parts, 2)

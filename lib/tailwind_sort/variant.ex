@@ -9,7 +9,14 @@ defmodule TailwindSort.Variant do
 
   @named ~r/^[a-zA-Z0-9_.%-]+$/
 
+  @type t :: %{
+          required(:kind) => :static | :functional | :compound | :arbitrary,
+          required(:raw) => String.t(),
+          optional(atom()) => term()
+        }
+
   @doc "Parses a variant string. Returns nil when Tailwind would reject it."
+  @spec parse_variant(variant :: String.t(), Design.t()) :: t() | nil
   def parse_variant(raw, %Design{} = d) do
     if String.starts_with?(raw, "[") and String.ends_with?(raw, "]"),
       do: parse_arbitrary_variant(raw),
@@ -140,6 +147,7 @@ defmodule TailwindSort.Variant do
     end
   end
 
+  @spec compounds_with?(parent_root :: String.t(), child :: t(), Design.t()) :: boolean()
   def compounds_with?(parent, child, d) do
     child_compounds =
       case child do
@@ -154,6 +162,7 @@ defmodule TailwindSort.Variant do
   end
 
   @doc "Checks whether applying the variant produces CSS, like `applyVariant != null` in Tailwind."
+  @spec produces_css?(t(), Design.t(), non_neg_integer()) :: boolean()
   def produces_css?(variant, d, depth \\ 0)
   def produces_css?(%{kind: :arbitrary, relative: rel}, _d, depth), do: not (rel and depth == 0)
   def produces_css?(%{kind: :static}, _d, _depth), do: true
@@ -209,6 +218,7 @@ defmodule TailwindSort.Variant do
   end
 
   @doc "Port of Variants#compare. The raw string is the identity, because Tailwind caches variants by it."
+  @spec compare_variants(t(), t(), Design.t()) :: integer()
   def compare_variants(%{raw: r}, %{raw: r}, _d), do: 0
 
   def compare_variants(%{kind: :arbitrary} = a, %{kind: :arbitrary} = z, _d),
@@ -282,6 +292,7 @@ defmodule TailwindSort.Variant do
   defp resolve_width(_, _, _), do: nil
 
   @doc false
+  @spec compare_breakpoints(String.t(), String.t(), :asc | :desc) :: integer()
   def compare_breakpoints(a, a, _dir), do: 0
 
   def compare_breakpoints(a, z, dir) do

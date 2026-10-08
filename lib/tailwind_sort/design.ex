@@ -33,6 +33,8 @@ defmodule TailwindSort.Design do
     :ignored_theme_keys
   ]
 
+  @type t :: %__MODULE__{}
+
   @data_key {__MODULE__, :data}
 
   @default_icon_prefix "hero-"
@@ -46,6 +48,7 @@ defmodule TailwindSort.Design do
 
   The only option is `:icon_prefix`. It defaults to `"hero-"`, and `nil` turns icon classes off.
   """
+  @spec load_design(Path.t() | nil, keyword()) :: t()
   def load_design(stylesheet \\ nil, opts \\ []) do
     icon_prefix = Keyword.get(opts, :icon_prefix, @default_icon_prefix)
     key = {__MODULE__, stylesheet && Path.expand(stylesheet), read_mtime(stylesheet), icon_prefix}
@@ -64,6 +67,7 @@ defmodule TailwindSort.Design do
   defp read_mtime(nil), do: nil
   defp read_mtime(path), do: File.stat!(path, time: :posix).mtime
 
+  @spec load_tailwind_data() :: map()
   def load_tailwind_data do
     case :persistent_term.get(@data_key, nil) do
       nil ->
@@ -83,6 +87,7 @@ defmodule TailwindSort.Design do
   end
 
   @doc false
+  @spec build_design(Stylesheet.t(), keyword()) :: t()
   def build_design(%Stylesheet{} = css, opts \\ []) do
     d = load_tailwind_data()
     named_colors = MapSet.new(d.named_colors)
@@ -150,6 +155,7 @@ defmodule TailwindSort.Design do
   end
 
   @doc "Checks whether the theme has `value` in namespace `ns`. Keys in Tailwind's ignoredThemeKeyMap don't count."
+  @spec theme_has_key?(t(), namespace :: String.t(), value :: String.t()) :: boolean()
   def theme_has_key?(%__MODULE__{theme: theme, ignored_theme_keys: ignored}, ns, value) do
     key = "#{ns}-#{value}"
 
@@ -204,6 +210,7 @@ defmodule TailwindSort.Design do
   end
 
   @doc "Port of compoundsForSelectors. Bit 1 stands for at-rules and bit 2 for style rules. 0 means never."
+  @spec compute_selector_compounds(selectors :: [String.t()]) :: 0..3
   def compute_selector_compounds(selectors) do
     Enum.reduce_while(selectors, 0, fn sel, acc ->
       cond do

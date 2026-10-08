@@ -45,6 +45,7 @@ defmodule TailwindSort do
 
   @behaviour Mix.Tasks.Format
 
+  alias Mix.Tasks.Format
   alias TailwindSort.Design
   alias TailwindSort.Sorter
   alias TailwindSort.Template
@@ -52,10 +53,10 @@ defmodule TailwindSort do
   # Multi-letter sigils like ~HOLO and ~CLS arrived in Elixir 1.15. Older versions reject the key.
   @sigils if Version.match?(System.version(), ">= 1.15.0"), do: [:H, :HOLO, :CLS], else: [:H]
 
-  @impl true
+  @impl Format
   def features(_opts), do: [sigils: @sigils, extensions: [".heex", ".holo"]]
 
-  @impl true
+  @impl Format
   def format(contents, opts) do
     config = Keyword.get(opts, :tailwind_sort, [])
 
@@ -89,6 +90,7 @@ defmodule TailwindSort do
       iex> TailwindSort.sort_classes("p-4 flex hover:p-2 foo")
       "foo flex p-4 hover:p-2"
   """
+  @spec sort_classes(classes :: String.t(), keyword()) :: String.t()
   def sort_classes(classes, opts \\ []) when is_binary(classes) do
     Sorter.sort_class_string(classes, load_configured_design(opts), opts)
   end
