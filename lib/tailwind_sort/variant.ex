@@ -28,9 +28,7 @@ defmodule TailwindSort.Variant do
     inner = binary_part(raw, 1, byte_size(raw) - 2)
 
     with false <- String.starts_with?(inner, "@") and String.contains?(inner, "&"),
-         selector = Text.decode_arbitrary_value(inner),
-         true <- Text.valid_arbitrary_value?(selector),
-         true <- String.trim(selector) != "" do
+         selector when selector != nil <- Text.decode_valid_arbitrary_value(inner) do
       relative = String.first(selector) in [">", "+", "~"]
 
       selector =
@@ -138,13 +136,11 @@ defmodule TailwindSort.Variant do
   end
 
   defp parse_arbitrary_value(value, form) do
-    v = Text.decode_arbitrary_value(binary_part(value, 1, byte_size(value) - 2))
-
-    cond do
-      not Text.valid_arbitrary_value?(v) or String.trim(v) == "" -> nil
-      form == :var and not String.starts_with?(v, "--") -> nil
-      form == :var -> {:arbitrary, "var(#{v})", :var}
-      true -> {:arbitrary, v, :arb}
+    case Text.decode_valid_arbitrary_value(binary_part(value, 1, byte_size(value) - 2)) do
+      nil -> nil
+      "--" <> _ = v when form == :var -> {:arbitrary, "var(#{v})", :var}
+      _ when form == :var -> nil
+      v -> {:arbitrary, v, :arb}
     end
   end
 

@@ -79,18 +79,11 @@ defmodule TailwindSort.Sorter do
 
   defp parse_class(class, d) do
     with {variants, parses} <- Candidate.parse_candidate(class, d),
-         sig when sig != nil <- pick_best_signature(parses, d) do
+         sig when sig != nil <- parses |> Enum.map(&Utility.compute_signature(&1, d)) |> Utility.pick_min_signature() do
       {variants, sig}
     else
       _ -> nil
     end
-  end
-
-  defp pick_best_signature(parses, d) do
-    parses
-    |> Enum.map(&Utility.compute_signature(&1, d))
-    |> Enum.reject(&is_nil/1)
-    |> Enum.min(fn a, z -> Utility.compare_signatures(a, z) <= 0 end, fn -> nil end)
   end
 
   # Port of getVariantOrder. We sort every variant in use, and variants that compare equal share a bit.

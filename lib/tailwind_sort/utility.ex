@@ -226,7 +226,9 @@ defmodule TailwindSort.Utility do
   defp find_first_diff(_, []), do: -1
   defp find_first_diff([a | _], [z | _]), do: a - z
 
-  defp pick_min_signature(sigs) do
+  @doc "Returns the signature that sorts first. Nils are skipped, and an all-nil list gives nil."
+  @spec pick_min_signature([signature() | nil]) :: signature() | nil
+  def pick_min_signature(sigs) do
     sigs
     |> Enum.reject(&is_nil/1)
     |> Enum.min(fn a, z -> compare_signatures(a, z) <= 0 end, fn -> nil end)

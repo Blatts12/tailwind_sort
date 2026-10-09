@@ -79,6 +79,13 @@ defmodule TailwindSort.Text do
       else: replace_underscores(input, false)
   end
 
+  @doc "Decodes an arbitrary value. Returns nil when the result is invalid or blank."
+  @spec decode_valid_arbitrary_value(value :: String.t()) :: String.t() | nil
+  def decode_valid_arbitrary_value(input) do
+    value = decode_arbitrary_value(input)
+    if valid_arbitrary_value?(value) and String.trim(value) != "", do: value
+  end
+
   defp decode_function_calls(<<>>, acc), do: acc |> Enum.reverse() |> IO.iodata_to_binary()
 
   # A run of name bytes is a function name when `(` follows it. Otherwise no suffix of the run

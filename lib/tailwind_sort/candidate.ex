@@ -198,8 +198,8 @@ defmodule TailwindSort.Candidate do
   @spec parse_modifier(modifier :: String.t()) :: modifier()
   def parse_modifier("[" <> _ = m) do
     if String.ends_with?(m, "]") do
-      v = Text.decode_arbitrary_value(binary_part(m, 1, byte_size(m) - 2))
-      if Text.valid_arbitrary_value?(v) and String.trim(v) != "", do: {:arbitrary, v}
+      with v when v != nil <- Text.decode_valid_arbitrary_value(binary_part(m, 1, byte_size(m) - 2)),
+           do: {:arbitrary, v}
     else
       parse_named_modifier(m)
     end
