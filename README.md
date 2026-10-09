@@ -109,7 +109,7 @@ sample classes and writes down which properties each one sets. The samples cover
 - every kind of modifier, like the `/50` in `bg-red-500/50`
 - every variant, plus which variant chains Tailwind accepts. Some look valid but aren't, like `group-not-hover`.
 
-The result ships as `priv/tailwind_data.etf`, about 850 KB. That's the cost of this approach. You get a bigger
+The result ships as `priv/tailwind_data.etf`, about 670 KB. That's the cost of this approach. You get a bigger
 package, and we skip porting thousands of lines.
 
 Your stylesheet gets read when you run `mix format`. The plugin picks up:
