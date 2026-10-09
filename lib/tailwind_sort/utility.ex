@@ -197,7 +197,6 @@ defmodule TailwindSort.Utility do
     end
   end
 
-  # No corpus value has exactly this type set, so we take the one sharing the most types.
   defp find_closest_corpus_index(:var, by_types), do: Map.get(by_types, :var)
 
   defp find_closest_corpus_index(types, by_types) do

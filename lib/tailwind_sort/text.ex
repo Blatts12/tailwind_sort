@@ -42,7 +42,6 @@ defmodule TailwindSort.Text do
   defp to_closing_bracket(?[), do: ?]
   defp to_closing_bracket(?{), do: ?}
 
-  # Returns what follows the closing quote, or `<<>>` when the string never closes.
   defp skip_quoted_string(<<?\\, _, rest::binary>>, q), do: skip_quoted_string(rest, q)
   defp skip_quoted_string(<<q, rest::binary>>, q), do: rest
   defp skip_quoted_string(<<_, rest::binary>>, q), do: skip_quoted_string(rest, q)
@@ -156,7 +155,6 @@ defmodule TailwindSort.Text do
     decode_function_calls(rest, [[replace_underscores(name, false), "(", decoded_inner, ")"] | acc])
   end
 
-  # Returns `{inner, rest}`. `inner` drops the closing paren and `rest` starts right after it.
   defp take_balanced_parens(<<>>, _depth, acc), do: {acc |> Enum.reverse() |> IO.iodata_to_binary(), <<>>}
 
   defp take_balanced_parens(<<?), rest::binary>>, 1, acc), do: {acc |> Enum.reverse() |> IO.iodata_to_binary(), rest}

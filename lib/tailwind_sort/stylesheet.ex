@@ -175,7 +175,6 @@ defmodule TailwindSort.Stylesheet do
     end
   end
 
-  # Scans until `{`, `}` or `;` at paren depth 0. Strings get skipped as a whole.
   defp scan_next_token(css, buf, depth \\ 0)
   defp scan_next_token(<<>>, buf, _), do: {:eof, IO.iodata_to_binary(buf)}
   defp scan_next_token(<<?{, rest::binary>>, buf, 0), do: {:open, IO.iodata_to_binary(buf), rest}

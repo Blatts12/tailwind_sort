@@ -249,7 +249,6 @@ defmodule TailwindSort.Design do
     end)
   end
 
-  # Works out what `--value(...)` and `--modifier(...)` accept in a functional @utility.
   defp parse_value_rules(decls) do
     body = Enum.map_join(decls, ";", &elem(&1, 1))
 

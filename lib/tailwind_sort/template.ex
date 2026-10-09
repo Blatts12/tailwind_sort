@@ -29,7 +29,6 @@ defmodule TailwindSort.Template do
     end
   end
 
-  # Entries are exact names or regexes. A regex runs against the whole attribute name as written.
   defp build_attribute_matcher(entries) do
     {names, regexes} = Enum.split_with(List.wrap(entries), &is_binary/1)
     names = MapSet.new(names)
@@ -182,7 +181,6 @@ defmodule TailwindSort.Template do
     end
   end
 
-  # Returns the chunks in order. Each one is `{:static, start, stop}` or `{:dynamic, start, stop}`.
   defp scan_quoted_value(src, pos, _q, _interp, _start, _chunks) when pos >= byte_size(src), do: :error
 
   defp scan_quoted_value(src, pos, q, interp, start, chunks) do
@@ -239,8 +237,6 @@ defmodule TailwindSort.Template do
   end
 
   # Scans an Elixir expression from just after an opening `{` to the matching `}`.
-  # Returns `{:ok, pos_after_brace, string_literals}`, where each literal is a chunk list.
-
   defp scan_expr(src, pos, _depth, _collect, _strings) when pos >= byte_size(src), do: :error
 
   defp scan_expr(src, pos, depth, collect, strings) do
