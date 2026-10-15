@@ -1,4 +1,4 @@
-defmodule TailwindSort.CustomUtility do
+defmodule TailwindSort.Design.CustomUtility do
   @moduledoc """
   Handles utilities that your stylesheet adds with `@utility`, plus icon classes like `hero-x-mark`.
 

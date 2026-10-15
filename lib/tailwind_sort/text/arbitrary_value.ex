@@ -1,4 +1,4 @@
-defmodule TailwindSort.ArbitraryValue do
+defmodule TailwindSort.Text.ArbitraryValue do
   @moduledoc """
   Reads the value inside brackets, like the `#fff` in `bg-[#fff]` or `color:red` in `[color:red]`.
 

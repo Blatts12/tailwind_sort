@@ -1,4 +1,4 @@
-defmodule TailwindSort.ByteScan do
+defmodule TailwindSort.Template.ByteScan do
   @moduledoc """
   Byte offset helpers for the template and Elixir expression scanners.
 

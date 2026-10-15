@@ -6,10 +6,11 @@ defmodule TailwindSort.Design do
   like theme keys, custom variants and custom utilities.
   """
 
-  alias TailwindSort.ArbitraryValue
-  alias TailwindSort.CustomUtility
   alias TailwindSort.DataType
+  alias TailwindSort.Design.CustomUtility
+  alias TailwindSort.Design.VariantTable
   alias TailwindSort.Stylesheet
+  alias TailwindSort.Text.ArbitraryValue
 
   defstruct [
     :version,
@@ -106,34 +107,34 @@ defmodule TailwindSort.Design do
     {custom_static, custom_functional} =
       CustomUtility.build_custom_utilities(css.utilities, Keyword.get(opts, :icon_prefix), property_index)
 
-    put_variants(
-      %__MODULE__{
-        version: d.version,
-        prefix: css.prefix,
-        theme: theme,
-        property_index: property_index,
-        named_colors: named_colors,
-        static: MapSet.new(d.static_utilities ++ Map.keys(custom_static)),
-        functional_roots: MapSet.new(d.functional_roots ++ Map.keys(custom_functional)),
-        exact: d.exact,
-        exact_modifiers: d.exact_modifiers,
-        functional: d.functional,
-        ns_priority: d.ns_priority,
-        modifiers: d.modifiers,
-        modifier_tables: d.modifier_tables,
-        corpus_by_types: corpus_by_types,
-        hints: MapSet.new(d.hints),
-        functional_variant_rules: d.functional_variant_rules,
-        custom_static: custom_static,
-        custom_functional: custom_functional,
-        compound_chains: d.compound_chains,
-        keywords: MapSet.new(d.keywords),
-        ignored_theme_keys: d.ignored_theme_keys,
-        custom_variants: MapSet.new(css.variants, &elem(&1, 0))
-      },
-      d,
-      css.variants
-    )
+    {variants, variant_cmp} = VariantTable.build_variant_table(d, theme, css.variants)
+
+    %__MODULE__{
+      version: d.version,
+      prefix: css.prefix,
+      theme: theme,
+      property_index: property_index,
+      named_colors: named_colors,
+      static: MapSet.new(d.static_utilities ++ Map.keys(custom_static)),
+      functional_roots: MapSet.new(d.functional_roots ++ Map.keys(custom_functional)),
+      exact: d.exact,
+      exact_modifiers: d.exact_modifiers,
+      functional: d.functional,
+      ns_priority: d.ns_priority,
+      modifiers: d.modifiers,
+      modifier_tables: d.modifier_tables,
+      corpus_by_types: corpus_by_types,
+      hints: MapSet.new(d.hints),
+      variants: variants,
+      variant_cmp: variant_cmp,
+      functional_variant_rules: d.functional_variant_rules,
+      custom_static: custom_static,
+      custom_functional: custom_functional,
+      compound_chains: d.compound_chains,
+      keywords: MapSet.new(d.keywords),
+      ignored_theme_keys: d.ignored_theme_keys,
+      custom_variants: MapSet.new(css.variants, &elem(&1, 0))
+    }
   end
 
   # `--ns-*: initial` clears a namespace, as in Theme#clearNamespace. Keys owned by a more
@@ -162,71 +163,5 @@ defmodule TailwindSort.Design do
 
     Map.has_key?(theme, key) and
       not Enum.any?(Map.get(ignored, ns, []), &(key == &1 or String.starts_with?(key, &1 <> "-")))
-  end
-
-  defp put_variants(design, d, custom) do
-    variants =
-      d.variants
-      |> Map.new(fn {name, kind, order, compounds, cw, _cmp} ->
-        {name, %{kind: kind, order: order, compounds: compounds, compounds_with: cw}}
-      end)
-      |> Map.merge(build_breakpoint_variants(design.theme, d.breakpoint_order))
-      |> add_custom_variants(custom)
-
-    %{design | variants: variants, variant_cmp: build_variant_comparators(d.variants)}
-  end
-
-  defp build_breakpoint_variants(theme, order) do
-    for {"--breakpoint-" <> name, _} <- theme, not String.contains?(name, "--"), into: %{} do
-      {name, %{kind: :static, order: order, compounds: 1, compounds_with: 0}}
-    end
-  end
-
-  defp add_custom_variants(variants, custom) do
-    max_order = variants |> Map.values() |> Enum.map(& &1.order) |> Enum.max()
-
-    {variants, _} =
-      Enum.reduce(custom, {variants, max_order}, fn {name, selectors}, {acc, last} ->
-        compounds = compute_selector_compounds(selectors)
-
-        case acc do
-          %{^name => existing} ->
-            {Map.put(acc, name, %{existing | kind: :static, compounds: compounds}), last}
-
-          _ ->
-            {Map.put(acc, name, %{kind: :static, order: last + 1, compounds: compounds, compounds_with: 0}), last + 1}
-        end
-      end)
-
-    variants
-  end
-
-  defp build_variant_comparators(core_variants) do
-    Enum.reduce(core_variants, %{}, fn
-      {"max", _, o, _, _, true}, acc -> Map.put(acc, o, {:breakpoint, :desc})
-      {"min", _, o, _, _, true}, acc -> Map.put(acc, o, {:breakpoint, :asc})
-      {"@max", _, o, _, _, true}, acc -> Map.put(acc, o, {:container, :desc})
-      {"@min", _, o, _, _, true}, acc -> Map.put(acc, o, {:container, :asc})
-      _, acc -> acc
-    end)
-  end
-
-  @doc "Port of compoundsForSelectors. Bit 1 stands for at-rules and bit 2 for style rules. 0 means never."
-  @spec compute_selector_compounds(selectors :: [String.t()]) :: 0..3
-  def compute_selector_compounds(selectors) do
-    Enum.reduce_while(selectors, 0, fn sel, acc ->
-      cond do
-        String.starts_with?(sel, "@") ->
-          if Enum.any?(~w(@media @supports @container), &String.starts_with?(sel, &1)),
-            do: {:cont, Bitwise.bor(acc, 1)},
-            else: {:halt, 0}
-
-        String.contains?(sel, "::") ->
-          {:halt, 0}
-
-        true ->
-          {:cont, Bitwise.bor(acc, 2)}
-      end
-    end)
   end
 end

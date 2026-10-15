@@ -1,4 +1,4 @@
-defmodule TailwindSort.ElixirExpr do
+defmodule TailwindSort.Template.ElixirExpr do
   @moduledoc ~S"""
   Scans the Elixir expression inside a template's `{...}`, like the one in `class={...}`.
 
@@ -10,7 +10,7 @@ defmodule TailwindSort.ElixirExpr do
   whitespace where they join.
   """
 
-  import TailwindSort.ByteScan
+  import TailwindSort.Template.ByteScan
 
   alias TailwindSort.Text
 

@@ -12,14 +12,14 @@ defmodule TailwindSort.Template do
       stays in place, since it may glue onto the other side.
     * `class="a {@b} c"` uses the same chunking, for Hologram only (`interpolate_quoted: true`).
 
-  `TailwindSort.ElixirExpr` reads the Elixir inside `{...}`.
+  `TailwindSort.Template.ElixirExpr` reads the Elixir inside `{...}`.
   """
 
-  import TailwindSort.ByteScan
+  import TailwindSort.Template.ByteScan
 
   alias TailwindSort.Design
-  alias TailwindSort.ElixirExpr
   alias TailwindSort.Sorter
+  alias TailwindSort.Template.ElixirExpr
   alias TailwindSort.Text
 
   @spec sort_class_attributes(template :: String.t(), Design.t(), keyword()) :: String.t()
@@ -220,7 +220,7 @@ defmodule TailwindSort.Template do
     end)
   end
 
-  # `lead` and `trail` are the string's edges, as in `t:TailwindSort.ElixirExpr.edge/0`.
+  # `lead` and `trail` are the string's edges, as in `t:TailwindSort.Template.ElixirExpr.edge/0`.
   defp build_chunk_edits(src, chunks, ctx, edits, lead \\ :free, trail \\ :free) do
     statics = for {:static, _, _} = c <- chunks, do: c
     last = length(chunks) - 1

@@ -14,6 +14,7 @@ defmodule TailwindSort.Sorter do
   alias TailwindSort.Text
   alias TailwindSort.Utility
   alias TailwindSort.Variant
+  alias TailwindSort.Variant.Order
 
   @max_cached_classes 20_000
 
@@ -89,11 +90,11 @@ defmodule TailwindSort.Sorter do
     sorted =
       resolved
       |> list_used_variants()
-      |> Enum.sort(&(Variant.compare_variants(&1, &2, d) <= 0))
+      |> Enum.sort(&(Order.compare_variants(&1, &2, d) <= 0))
 
     {ranks, _, _} =
       Enum.reduce(sorted, {%{}, nil, 0}, fn v, {acc, prev, i} ->
-        i = if prev != nil and Variant.compare_variants(prev, v, d) != 0, do: i + 1, else: i
+        i = if prev != nil and Order.compare_variants(prev, v, d) != 0, do: i + 1, else: i
         {Map.put(acc, v.raw, i), v, i}
       end)
 

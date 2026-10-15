@@ -18,9 +18,9 @@ defmodule TailwindSort.Utility do
   """
 
   alias TailwindSort.Candidate
-  alias TailwindSort.CustomUtility
   alias TailwindSort.DataType
   alias TailwindSort.Design
+  alias TailwindSort.Design.CustomUtility
   alias TailwindSort.Text
 
   @type signature :: {[non_neg_integer()], non_neg_integer()}

@@ -3,7 +3,7 @@ defmodule TailwindSort.Text do
   String helpers that most other modules lean on to read class names the way Tailwind does.
 
   `split_top_level/2` ports `segment.ts` from `tailwindcss/src/utils`. Values inside brackets
-  live in `TailwindSort.ArbitraryValue`.
+  live in `TailwindSort.Text.ArbitraryValue`.
   """
 
   @doc "Splits `input` on a top-level separator. Separators inside (), [], {} and quotes don't count."

@@ -6,9 +6,9 @@ defmodule TailwindSort.Candidate do
   `tailwindcss/src/candidate.ts`. A class Tailwind would reject parses to `nil`.
   """
 
-  alias TailwindSort.ArbitraryValue
   alias TailwindSort.Design
   alias TailwindSort.Text
+  alias TailwindSort.Text.ArbitraryValue
   alias TailwindSort.Variant
 
   @type modifier :: {:named | :arbitrary | :var, String.t()} | nil
