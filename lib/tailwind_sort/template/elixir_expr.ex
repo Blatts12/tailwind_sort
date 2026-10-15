@@ -71,7 +71,7 @@ defmodule TailwindSort.Template.ElixirExpr do
       {:ok, next, chunks} when collect and close == ~s(") ->
         scan_expr(src, next, depth, collect, [{pos, [chunks]} | strings])
 
-      {:ok, next, chunks} when collect ->
+      {:ok, next, chunks} when collect and close == ~s(""") ->
         scan_expr(src, next, depth, collect, [{pos, Heredoc.split_heredoc_lines(src, chunks)} | strings])
 
       {:ok, next, _} ->
