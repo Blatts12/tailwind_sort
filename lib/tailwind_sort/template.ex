@@ -328,39 +328,8 @@ defmodule TailwindSort.Template do
       {:ok, next, chunks} when collect and close == ~s(") ->
         scan_expr(src, next, depth, collect, [{pos, [chunks]} | strings])
 
-      # Each heredoc line sorts on its own. Indents and newlines stay out of the chunks, since
-      # Elixir needs them. A `\` before the newline joins two lines, so we don't cut there.
-      # The first line is the rest of the opening `"""` line, which holds no classes.
       {:ok, next, chunks} when collect ->
-        {lines, line} =
-          Enum.reduce(chunks, {[], []}, fn
-            {:dynamic, _, _} = chunk, {lines, line} ->
-              {lines, [chunk | line]}
-
-            {:static, s, e}, {lines, line} ->
-              cuts =
-                for {i, _} <- :binary.matches(src, "\n", scope: {s, e - s}),
-                    not String.ends_with?(binary_part(src, s, i - s), ["\\", "\\\r"]),
-                    do: i
-
-              [first | rest] = Enum.zip_with([s | Enum.map(cuts, &(&1 + 1))], cuts ++ [e], &{:static, &1, &2})
-
-              Enum.reduce(rest, {lines, [first | line]}, fn seg, {lines, line} ->
-                {[Enum.reverse(line) | lines], [seg]}
-              end)
-          end)
-
-        lines =
-          [Enum.reverse(line) | lines]
-          |> Enum.reverse()
-          |> tl()
-          |> Enum.map(fn line ->
-            line
-            |> List.update_at(0, fn {:static, s, e} -> {:static, min(skip_ws(src, s), e), e} end)
-            |> List.update_at(-1, fn {:static, s, e} -> {:static, s, max(skip_ws_back(src, e), s)} end)
-          end)
-
-        scan_expr(src, next, depth, collect, [{pos, lines} | strings])
+        scan_expr(src, next, depth, collect, [{pos, split_heredoc_lines(src, chunks)} | strings])
 
       {:ok, next, _} ->
         scan_expr(src, next, depth, collect, strings)
@@ -368,6 +337,41 @@ defmodule TailwindSort.Template do
       :error ->
         :error
     end
+  end
+
+  # Each heredoc line sorts on its own. Indents and newlines stay out of the chunks, since Elixir
+  # needs them. The first line is the rest of the opening `"""` line, which holds no classes.
+  defp split_heredoc_lines(src, chunks) do
+    {lines, line} = Enum.reduce(chunks, {[], []}, &add_chunk_to_lines(src, &1, &2))
+
+    [Enum.reverse(line) | lines]
+    |> Enum.reverse()
+    |> tl()
+    |> Enum.map(&trim_line_edges(src, &1))
+  end
+
+  # `line` is the open line, kept in reverse until a newline closes it.
+  defp add_chunk_to_lines(_src, {:dynamic, _, _} = chunk, {lines, line}), do: {lines, [chunk | line]}
+
+  defp add_chunk_to_lines(src, {:static, s, e}, {lines, line}) do
+    [first | rest] = split_static_at_newlines(src, s, e)
+    Enum.reduce(rest, {lines, [first | line]}, fn seg, {lines, line} -> {[Enum.reverse(line) | lines], [seg]} end)
+  end
+
+  # A `\` before the newline joins two lines, so we don't cut there.
+  defp split_static_at_newlines(src, s, e) do
+    cuts =
+      for {i, _} <- :binary.matches(src, "\n", scope: {s, e - s}),
+          not String.ends_with?(binary_part(src, s, i - s), ["\\", "\\\r"]),
+          do: i
+
+    Enum.zip_with([s | Enum.map(cuts, &(&1 + 1))], cuts ++ [e], &{:static, &1, &2})
+  end
+
+  defp trim_line_edges(src, line) do
+    line
+    |> List.update_at(0, fn {:static, s, e} -> {:static, min(skip_ws(src, s), e), e} end)
+    |> List.update_at(-1, fn {:static, s, e} -> {:static, s, max(skip_ws_back(src, e), s)} end)
   end
 
   # Maps `{line, column}` of each string inside a `<>` to its `{lead, trail}`, as in

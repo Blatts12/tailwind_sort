@@ -66,8 +66,7 @@ defmodule TailwindSort.Candidate do
   end
 
   defp parse_dynamic_utility(base, d) do
-    with [base_wo_mod | mod_rest] when length(mod_rest) <= 1 <- Text.split_top_level(base, "/"),
-         mod_segment = List.first(mod_rest),
+    with {:ok, base_wo_mod, mod_segment} <- split_modifier(base),
          {:ok, modifier} <- parse_modifier_segment(mod_segment) do
       if String.starts_with?(base_wo_mod, "[") do
         parse_arbitrary_property(base_wo_mod, modifier)
@@ -77,7 +76,15 @@ defmodule TailwindSort.Candidate do
         |> build_functional_parses(modifier, mod_segment, [])
       end
     else
-      _ -> []
+      :error -> []
+    end
+  end
+
+  defp split_modifier(base) do
+    case Text.split_top_level(base, "/") do
+      [base_wo_mod] -> {:ok, base_wo_mod, nil}
+      [base_wo_mod, mod_segment] -> {:ok, base_wo_mod, mod_segment}
+      _ -> :error
     end
   end
 
@@ -136,14 +143,10 @@ defmodule TailwindSort.Candidate do
         end
 
       String.ends_with?(b, ")") ->
-        with {i, _} <- :binary.match(b, "-("),
-             root = binary_part(b, 0, i),
+        with {:ok, root, inner} <- split_root_and_parens(b),
              true <- root_registered?.(root),
-             value = binary_part(b, i + 2, byte_size(b) - i - 3),
-             {type, value} <- split_var_shorthand(Text.split_top_level(value, ":")),
-             "--" <> _ <- value,
-             true <- Text.valid_arbitrary_value?(value) do
-          [{root, if(type, do: "[#{type}:var(#{value})]", else: "[var(#{value})]")}]
+             {:ok, value} <- expand_var_shorthand(inner) do
+          [{root, value}]
         else
           _ -> []
         end
@@ -153,8 +156,25 @@ defmodule TailwindSort.Candidate do
     end
   end
 
-  defp split_var_shorthand([type, value]), do: {type, value}
-  defp split_var_shorthand([value]), do: {nil, value}
+  defp split_root_and_parens(b) do
+    case :binary.split(b, "-(") do
+      [root, rest] -> {:ok, root, binary_part(rest, 0, byte_size(rest) - 1)}
+      [_] -> :error
+    end
+  end
+
+  # `(--x)` stands for `[var(--x)]`, and `(color:--x)` for `[color:var(--x)]`.
+  defp expand_var_shorthand(inner) do
+    with {type, "--" <> _ = var} <- split_var_shorthand(Text.split_top_level(inner, ":")),
+         true <- Text.valid_arbitrary_value?(var) do
+      {:ok, "[#{type}var(#{var})]"}
+    else
+      _ -> :error
+    end
+  end
+
+  defp split_var_shorthand([type, var]), do: {type <> ":", var}
+  defp split_var_shorthand([var]), do: {"", var}
   defp split_var_shorthand(_), do: nil
 
   # Mirrors the generator loop in candidate.ts. A `continue` there skips one root, and a `return` stops them all.

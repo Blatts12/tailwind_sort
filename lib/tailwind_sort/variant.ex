@@ -27,20 +27,25 @@ defmodule TailwindSort.Variant do
   defp parse_arbitrary_variant(raw) do
     inner = binary_part(raw, 1, byte_size(raw) - 2)
 
-    with false <- String.starts_with?(inner, "@") and String.contains?(inner, "&"),
-         selector when selector != nil <- Text.decode_valid_arbitrary_value(inner) do
-      relative = String.first(selector) in [">", "+", "~"]
+    if at_rule_with_ampersand?(inner),
+      do: nil,
+      else: inner |> Text.decode_valid_arbitrary_value() |> build_arbitrary_variant(raw)
+  end
 
-      selector =
-        if not relative and not String.starts_with?(selector, "@") and
-             not String.contains?(selector, "&"),
-           do: "&:is(#{selector})",
-           else: selector
+  defp at_rule_with_ampersand?(inner), do: String.starts_with?(inner, "@") and String.contains?(inner, "&")
 
-      %{kind: :arbitrary, raw: raw, selector: selector, relative: relative}
-    else
-      _ -> nil
-    end
+  defp build_arbitrary_variant(nil, _raw), do: nil
+
+  defp build_arbitrary_variant(selector, raw) do
+    relative = String.first(selector) in [">", "+", "~"]
+
+    selector =
+      if not relative and not String.starts_with?(selector, "@") and
+           not String.contains?(selector, "&"),
+         do: "&:is(#{selector})",
+         else: selector
+
+    %{kind: :arbitrary, raw: raw, selector: selector, relative: relative}
   end
 
   defp parse_named_variant(raw, d) do
