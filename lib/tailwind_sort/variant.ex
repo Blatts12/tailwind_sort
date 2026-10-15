@@ -7,6 +7,7 @@ defmodule TailwindSort.Variant do
   """
 
   alias TailwindSort.Candidate
+  alias TailwindSort.Candidate.Modifier
   alias TailwindSort.Design
   alias TailwindSort.Design.VariantTable
   alias TailwindSort.Text
@@ -101,7 +102,7 @@ defmodule TailwindSort.Variant do
   defp build_with_modifier(nil, build_variant), do: build_variant.(nil)
 
   defp build_with_modifier(mod, build_variant) do
-    case Candidate.parse_modifier(mod) do
+    case Modifier.parse_modifier(mod) do
       nil -> nil
       m -> build_variant.(m)
     end

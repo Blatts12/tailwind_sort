@@ -2,10 +2,13 @@ defmodule TailwindSort.Candidate do
   @moduledoc """
   Splits a class like `md:hover:bg-red-500/50` into its variants and its base utility.
 
-  This is a port of `parseCandidate`, `findRoots` and `parseModifier` from
-  `tailwindcss/src/candidate.ts`. A class Tailwind would reject parses to `nil`.
+  This is a port of `parseCandidate` and `findRoots` from `tailwindcss/src/candidate.ts`.
+  A class Tailwind would reject parses to `nil`. Functional utilities like `bg-red-500` go to
+  `TailwindSort.Candidate.Functional`, and modifiers to `TailwindSort.Candidate.Modifier`.
   """
 
+  alias TailwindSort.Candidate.Functional
+  alias TailwindSort.Candidate.Modifier
   alias TailwindSort.Design
   alias TailwindSort.Text
   alias TailwindSort.Text.ArbitraryValue
@@ -69,13 +72,9 @@ defmodule TailwindSort.Candidate do
   defp parse_dynamic_utility(base, d) do
     with {:ok, base_wo_mod, mod_segment} <- split_modifier(base),
          {:ok, modifier} <- parse_modifier_segment(mod_segment) do
-      if String.starts_with?(base_wo_mod, "[") do
-        parse_arbitrary_property(base_wo_mod, modifier)
-      else
-        base_wo_mod
-        |> find_utility_roots(d)
-        |> build_functional_parses(modifier, [])
-      end
+      if String.starts_with?(base_wo_mod, "["),
+        do: parse_arbitrary_property(base_wo_mod, modifier),
+        else: Functional.parse_functional_utility(base_wo_mod, modifier, d)
     else
       :error -> []
     end
@@ -92,7 +91,7 @@ defmodule TailwindSort.Candidate do
   defp parse_modifier_segment(nil), do: {:ok, nil}
 
   defp parse_modifier_segment(seg) do
-    case parse_modifier(seg) do
+    case Modifier.parse_modifier(seg) do
       nil -> :error
       m -> {:ok, m}
     end
@@ -125,130 +124,6 @@ defmodule TailwindSort.Candidate do
     value = ArbitraryValue.decode_arbitrary_value(raw_value)
     if ArbitraryValue.valid_arbitrary_value?(value), do: {:ok, value}, else: :error
   end
-
-  defp find_utility_roots(b, d) do
-    root_registered? = &MapSet.member?(d.functional_roots, &1)
-
-    cond do
-      String.ends_with?(b, "]") ->
-        case :binary.match(b, "-[") do
-          {i, _} ->
-            root = binary_part(b, 0, i)
-
-            if root_registered?.(root),
-              do: [{root, binary_part(b, i + 1, byte_size(b) - i - 1)}],
-              else: []
-
-          :nomatch ->
-            []
-        end
-
-      String.ends_with?(b, ")") ->
-        with {:ok, root, inner} <- split_root_and_parens(b),
-             true <- root_registered?.(root),
-             {:ok, value} <- expand_var_shorthand(inner) do
-          [{root, value}]
-        else
-          _ -> []
-        end
-
-      true ->
-        find_roots(b, root_registered?)
-    end
-  end
-
-  defp split_root_and_parens(b) do
-    case :binary.split(b, "-(") do
-      [root, rest] -> {:ok, root, binary_part(rest, 0, byte_size(rest) - 1)}
-      [_] -> :error
-    end
-  end
-
-  # `(--x)` stands for `[var(--x)]`, and `(color:--x)` for `[color:var(--x)]`.
-  defp expand_var_shorthand(inner) do
-    with {type, "--" <> _ = var} <- split_var_shorthand(Text.split_top_level(inner, ":")),
-         true <- ArbitraryValue.valid_arbitrary_value?(var) do
-      {:ok, "[#{type}var(#{var})]"}
-    else
-      _ -> :error
-    end
-  end
-
-  defp split_var_shorthand([type, var]), do: {type <> ":", var}
-  defp split_var_shorthand([var]), do: {"", var}
-  defp split_var_shorthand(_), do: nil
-
-  # Mirrors the generator loop in candidate.ts. A `continue` there skips one root, and a `return` stops them all.
-  defp build_functional_parses([], _modifier, acc), do: Enum.reverse(acc)
-
-  defp build_functional_parses([{root, value} | rest], modifier, acc) do
-    case parse_root_value(value) do
-      {:ok, v} -> build_functional_parses(rest, modifier, [{:functional, root, v, modifier} | acc])
-      :skip -> build_functional_parses(rest, modifier, acc)
-      :stop -> Enum.reverse(acc)
-    end
-  end
-
-  defp parse_root_value(nil), do: {:ok, nil}
-
-  defp parse_root_value(value) do
-    case {:binary.match(value, "["), String.ends_with?(value, "]")} do
-      {:nomatch, _} ->
-        if Text.named_value?(value), do: {:ok, {:named, value}}, else: :skip
-
-      {_, false} ->
-        :stop
-
-      {{start, _}, true} ->
-        case parse_arbitrary_value(binary_part(value, start + 1, byte_size(value) - start - 2)) do
-          nil -> :skip
-          v -> {:ok, v}
-        end
-    end
-  end
-
-  defp parse_arbitrary_value(raw) do
-    v = ArbitraryValue.decode_arbitrary_value(raw)
-
-    if ArbitraryValue.valid_arbitrary_value?(v) do
-      {hint, v} =
-        case :binary.split(v, ":") do
-          [hint, rest] -> if type_hint?(hint), do: {hint, rest}, else: {nil, v}
-          [_] -> {nil, v}
-        end
-
-      if hint == "" or String.trim(v) == "", do: nil, else: {:arbitrary, hint, v}
-    end
-  end
-
-  defp type_hint?(<<c, rest::binary>>) when c in ?a..?z or c == ?-, do: type_hint?(rest)
-  defp type_hint?(rest), do: rest == ""
-
-  @doc "Port of parseModifier. Returns `{:named, v}`, `{:arbitrary, v}`, `{:var, v}` or nil."
-  @spec parse_modifier(modifier :: String.t()) :: modifier()
-  def parse_modifier("[" <> _ = m) do
-    if String.ends_with?(m, "]") do
-      with v when v != nil <- ArbitraryValue.decode_valid_arbitrary_value(binary_part(m, 1, byte_size(m) - 2)),
-           do: {:arbitrary, v}
-    else
-      parse_named_modifier(m)
-    end
-  end
-
-  def parse_modifier("(" <> _ = m) do
-    if String.ends_with?(m, ")") do
-      inner = binary_part(m, 1, byte_size(m) - 2)
-
-      if String.starts_with?(inner, "--") and ArbitraryValue.valid_arbitrary_value?(inner),
-        do: {:var, "var(#{inner})"}
-    else
-      parse_named_modifier(m)
-    end
-  end
-
-  def parse_modifier(m), do: parse_named_modifier(m)
-
-  defp parse_named_modifier(m), do: if(Text.named_value?(m), do: {:named, m})
 
   @doc "Port of findRoots. Returns every `{root, value}` split where `root` is registered."
   @spec find_roots(input :: String.t(), root_exists? :: (String.t() -> boolean())) :: [{String.t(), String.t() | nil}]

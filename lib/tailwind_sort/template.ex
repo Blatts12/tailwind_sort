@@ -18,8 +18,9 @@ defmodule TailwindSort.Template do
   import TailwindSort.Template.ByteScan
 
   alias TailwindSort.Design
-  alias TailwindSort.Sorter
+  alias TailwindSort.Sorter.ClassString
   alias TailwindSort.Template.ElixirExpr
+  alias TailwindSort.Template.StringJoins
   alias TailwindSort.Text
 
   @spec sort_class_attributes(template :: String.t(), Design.t(), keyword()) :: String.t()
@@ -160,7 +161,7 @@ defmodule TailwindSort.Template do
           {:ok, next, strings} when sort? ->
             edits =
               src
-              |> ElixirExpr.find_string_edges(pos + 1, next - 1, strings)
+              |> StringJoins.find_string_edges(pos + 1, next - 1, strings)
               |> Enum.reduce(edits, &build_string_edits(src, &1, ctx, &2))
 
             scan_attributes(src, next, ctx, edits)
@@ -220,7 +221,7 @@ defmodule TailwindSort.Template do
     end)
   end
 
-  # `lead` and `trail` are the string's edges, as in `t:TailwindSort.Template.ElixirExpr.edge/0`.
+  # `lead` and `trail` are the string's edges, as in `t:TailwindSort.Template.StringJoins.edge/0`.
   defp build_chunk_edits(src, chunks, ctx, edits, lead \\ :free, trail \\ :free) do
     statics = for {:static, _, _} = c <- chunks, do: c
     last = length(chunks) - 1
@@ -247,7 +248,7 @@ defmodule TailwindSort.Template do
         new =
           if statics == [] or String.contains?(old, ["\\", ~s(""")]),
             do: old,
-            else: Sorter.sort_class_string(old, ctx.d, opts)
+            else: ClassString.sort_class_string(old, ctx.d, opts)
 
         if new == old, do: acc, else: [{s, e, new} | acc]
     end)

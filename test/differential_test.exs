@@ -4,7 +4,7 @@ defmodule TailwindSort.DifferentialTest do
   use ExUnit.Case, async: true
 
   alias TailwindSort.Design
-  alias TailwindSort.Sorter
+  alias TailwindSort.Sorter.ClassString
 
   for {name, css} <- [
         default: nil,
@@ -19,7 +19,7 @@ defmodule TailwindSort.DifferentialTest do
 
       mismatches =
         for {input, expected} <- cases,
-            (got = Sorter.sort_class_string(input, design)) != expected do
+            (got = ClassString.sort_class_string(input, design)) != expected do
           "\n  in:   #{input}\n  want: #{expected}\n  got:  #{got}"
         end
 

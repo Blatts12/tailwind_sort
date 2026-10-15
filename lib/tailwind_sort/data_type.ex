@@ -7,6 +7,7 @@ defmodule TailwindSort.DataType do
   and the generated data maps that set to how each utility behaves.
   """
 
+  alias TailwindSort.DataType.Number
   alias TailwindSort.Text
 
   @length_units ~w(cm mm Q in pc pt px em ex ch rem lh rlh vw vh vmin vmax vb vi svw svh lvw lvh dvw dvh cqw cqh cqi cqb cqmin cqmax)
@@ -47,7 +48,7 @@ defmodule TailwindSort.DataType do
   defp type_matches?("generic-name", v, _), do: v in @generic_names
   defp type_matches?("absolute-size", v, _), do: v in @absolute_sizes
   defp type_matches?("relative-size", v, _), do: v in ~w(larger smaller)
-  defp type_matches?("angle", v, _), do: match?({:ok, unit} when unit in ~w(deg rad grad turn), take_number(v))
+  defp type_matches?("angle", v, _), do: match?({:ok, unit} when unit in ~w(deg rad grad turn), Number.take_number(v))
   defp type_matches?("vector", v, _), do: vector_value?(v)
 
   @spec color_value?(value :: String.t(), named_colors :: MapSet.t(String.t())) :: boolean()
@@ -57,71 +58,29 @@ defmodule TailwindSort.DataType do
 
   defp math_function_call?(v), do: String.contains?(v, "(") and Enum.any?(@math_fns, &String.contains?(v, &1 <> "("))
 
-  defp number_value?(v), do: take_number(v) == {:ok, ""} or math_function_call?(v)
-  defp percentage_value?(v), do: take_number(v) == {:ok, "%"} or math_function_call?(v)
+  defp number_value?(v), do: Number.take_number(v) == {:ok, ""} or math_function_call?(v)
+  defp percentage_value?(v), do: Number.take_number(v) == {:ok, "%"} or math_function_call?(v)
 
   defp length_value?(v) do
-    match?({:ok, unit} when unit in @length_units, take_number(v)) or
+    match?({:ok, unit} when unit in @length_units, Number.take_number(v)) or
       lowercase_function_name(v) == "--spacing" or math_function_call?(v)
   end
 
   defp fraction_value?(v) do
-    with {:ok, rest} <- take_number(v),
+    with {:ok, rest} <- Number.take_number(v),
          "/" <> rest <- Text.trim_leading_whitespace(rest) do
-      take_number(Text.trim_leading_whitespace(rest)) == {:ok, ""}
+      Number.take_number(Text.trim_leading_whitespace(rest)) == {:ok, ""}
     else
       _ -> false
     end
   end
 
   defp vector_value?(v) do
-    with {:ok, " " <> rest} <- take_number(v),
-         {:ok, " " <> rest} <- take_number(String.trim_leading(rest, " ")) do
-      take_number(String.trim_leading(rest, " ")) == {:ok, ""}
+    with {:ok, " " <> rest} <- Number.take_number(v),
+         {:ok, " " <> rest} <- Number.take_number(String.trim_leading(rest, " ")) do
+      Number.take_number(String.trim_leading(rest, " ")) == {:ok, ""}
     else
       _ -> false
-    end
-  end
-
-  # Same as matching `[+-]?\d*\.?\d+(?:[eE][+-]?\d+)?` at the start of `v`. We always take the longest
-  # number. No suffix we check for starts with a digit or `.`, so a shorter match never helps.
-  defp take_number(<<sign, rest::binary>>) when sign in [?+, ?-], do: take_unsigned_number(rest)
-  defp take_number(v), do: take_unsigned_number(v)
-
-  defp take_unsigned_number(v) do
-    {int, rest} = split_leading_digits(v)
-
-    {frac, rest} =
-      with "." <> after_dot <- rest,
-           {frac, after_frac} when frac != "" <- split_leading_digits(after_dot) do
-        {frac, after_frac}
-      else
-        _ -> {"", rest}
-      end
-
-    if int == "" and frac == "", do: :error, else: {:ok, take_exponent(rest)}
-  end
-
-  defp take_exponent(<<e, rest::binary>> = v) when e in [?e, ?E] do
-    unsigned = with <<sign, after_sign::binary>> when sign in [?+, ?-] <- rest, do: after_sign
-
-    case split_leading_digits(unsigned) do
-      {"", _} -> v
-      {_, after_digits} -> after_digits
-    end
-  end
-
-  defp take_exponent(v), do: v
-
-  defp split_leading_digits(v) do
-    size = find_digits_end(v, 0)
-    {binary_part(v, 0, size), binary_part(v, size, byte_size(v) - size)}
-  end
-
-  defp find_digits_end(v, i) do
-    case v do
-      <<_::binary-size(^i), c, _::binary>> when c in ?0..?9 -> find_digits_end(v, i + 1)
-      _ -> i
     end
   end
 
