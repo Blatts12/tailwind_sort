@@ -13,6 +13,16 @@ defmodule TailwindSort.Template.ByteScanTest do
     end
   end
 
+  describe "skip_to/3" do
+    test "returns the offset of the nearest pattern" do
+      assert ByteScan.skip_to("text {@x} <p>", 1, ["<", "{"]) == 5
+    end
+
+    test "returns the end of the source when the pattern is missing" do
+      assert ByteScan.skip_to("<script>if (a < b) {}", 8, "</script") == 21
+    end
+  end
+
   test "peek_bytes/3 returns fewer bytes near the end and nothing past it" do
     assert ByteScan.peek_bytes("abc", 1, 5) == "bc"
     assert ByteScan.peek_bytes("abc", 3, 1) == ""

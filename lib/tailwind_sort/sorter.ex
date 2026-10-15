@@ -23,7 +23,7 @@ defmodule TailwindSort.Sorter do
   @doc "Builds a sort key for each class. A nil key marks a class Tailwind doesn't generate."
   @spec build_class_order(classes :: [String.t()], Design.t()) :: %{String.t() => sort_key() | nil}
   def build_class_order(classes, d) do
-    resolved = resolve_classes(Enum.uniq(classes), d)
+    resolved = resolve_classes(classes, d)
     ranks = rank_variants(resolved, d)
 
     Map.new(resolved, fn
@@ -60,7 +60,7 @@ defmodule TailwindSort.Sorter do
 
   # Many classes share a variant like `hover`, so we check each variant once per batch.
   defp resolve_new_classes(classes, d) do
-    parsed = Map.new(classes, &{&1, parse_class(&1, d)})
+    parsed = classes |> Enum.uniq() |> Map.new(&{&1, parse_class(&1, d)})
 
     produces_css =
       parsed
@@ -121,15 +121,16 @@ defmodule TailwindSort.Sorter do
     order = build_class_order(classes, d)
     {ellipsis, rest} = Enum.split_with(classes, &(&1 in ["...", "…"]))
     {unknown, known} = Enum.split_with(rest, &is_nil(Map.fetch!(order, &1)))
-    known = if Keyword.get(opts, :remove_duplicates, true), do: Enum.uniq(known), else: known
-
     # Each key ends with its class, so we sort the keys and read the classes back out.
+    # That also puts repeats of a class next to each other, where `Enum.dedup/1` finds them.
     sorted_known =
       known
       |> Enum.map(&Map.fetch!(order, &1))
       |> Enum.sort(&(compare_sort_keys(&1, &2) <= 0))
       |> Enum.map(&elem(&1, 2))
 
-    {unknown ++ sorted_known ++ ellipsis, length(rest) - length(unknown) - length(known)}
+    sorted_known = if Keyword.get(opts, :remove_duplicates, true), do: Enum.dedup(sorted_known), else: sorted_known
+
+    {unknown ++ sorted_known ++ ellipsis, length(known) - length(sorted_known)}
   end
 end

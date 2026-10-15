@@ -85,11 +85,14 @@ defmodule TailwindSort.Template.ElixirExpr do
   defp scan_string(src, pos, _close, _start, _chunks) when pos >= byte_size(src), do: :error
 
   defp scan_string(src, pos, close, start, chunks) do
-    case peek_bytes(src, pos, 2) do
-      <<?\\, _>> ->
+    case src do
+      <<_::binary-size(^pos), c, _::binary>> when c not in [?\\, ?#, ?", ?'] ->
+        scan_string(src, pos + 1, close, start, chunks)
+
+      <<_::binary-size(^pos), ?\\, _, _::binary>> ->
         scan_string(src, pos + 2, close, start, chunks)
 
-      "\#{" ->
+      <<_::binary-size(^pos), "\#{", _::binary>> ->
         case scan_expr(src, pos + 2, false) do
           {:ok, next, _} ->
             scan_string(src, next, close, next, [

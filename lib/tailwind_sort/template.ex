@@ -25,10 +25,15 @@ defmodule TailwindSort.Template do
 
   @spec sort_class_attributes(template :: String.t(), Design.t(), keyword()) :: String.t()
   def sort_class_attributes(src, design, opts) do
+    interpolation_stops = if Keyword.get(opts, :interpolate_quoted, false), do: ["{"], else: []
+
+    # Compiled once per template. `:binary.match` rebuilds an uncompiled pattern on every call,
+    # which costs more than stepping over a short attribute value.
     ctx = %{
       d: design,
       attrs: build_attribute_matcher(Keyword.get(opts, :attributes, ["class"])),
-      interpolate_quoted: Keyword.get(opts, :interpolate_quoted, false),
+      text_stops: :binary.compile_pattern(["<", "{"]),
+      quote_stops: Map.new([?", ?'], &{&1, :binary.compile_pattern([<<&1>> | interpolation_stops])}),
       sort_opts: Keyword.take(opts, [:remove_duplicates])
     }
 
@@ -77,7 +82,7 @@ defmodule TailwindSort.Template do
         end
 
       _ ->
-        scan_text(src, pos + 1, ctx, edits)
+        scan_text(src, skip_to(src, pos + 1, ctx.text_stops), ctx, edits)
     end
   end
 
@@ -87,18 +92,11 @@ defmodule TailwindSort.Template do
     case scan_attributes(src, pos, ctx, edits) do
       {:ok, next, edits} ->
         if String.downcase(name) in ["script", "style"],
-          do: scan_text(src, skip_raw_text(src, next, String.downcase(name)), ctx, edits),
+          do: scan_text(src, skip_to(src, next, "</" <> String.downcase(name)), ctx, edits),
           else: scan_text(src, next, ctx, edits)
 
       {:eof, edits} ->
         edits
-    end
-  end
-
-  defp skip_raw_text(src, pos, name) do
-    case :binary.match(src, "</" <> name, scope: {pos, byte_size(src) - pos}) do
-      {i, _} -> i
-      :nomatch -> byte_size(src)
     end
   end
 
@@ -139,15 +137,8 @@ defmodule TailwindSort.Template do
 
   defp scan_attribute_value(src, pos, sort?, ctx, edits) do
     case peek_bytes(src, pos, 1) do
-      q when q in ["\"", "'"] ->
-        case scan_quoted_value(
-               src,
-               pos + 1,
-               :binary.first(q),
-               ctx.interpolate_quoted,
-               pos + 1,
-               []
-             ) do
+      <<q>> when q in [?", ?'] ->
+        case scan_quoted_value(src, pos + 1, q, Map.fetch!(ctx.quote_stops, q), pos + 1, []) do
           {:ok, next, chunks} ->
             edits = if sort?, do: build_chunk_edits(src, chunks, ctx, edits), else: edits
             scan_attributes(src, next, ctx, edits)
@@ -186,17 +177,23 @@ defmodule TailwindSort.Template do
     end
   end
 
-  defp scan_quoted_value(src, pos, _q, _interp, _start, _chunks) when pos >= byte_size(src), do: :error
+  # `stops` holds the closing quote, plus `{` when the value interpolates.
+  defp scan_quoted_value(src, pos, q, stops, start, chunks) do
+    case :binary.match(src, stops, scope: {pos, byte_size(src) - pos}) do
+      {i, _} -> scan_quoted_stop(src, i, q, stops, start, chunks)
+      :nomatch -> :error
+    end
+  end
 
-  defp scan_quoted_value(src, pos, q, interp, start, chunks) do
+  defp scan_quoted_stop(src, pos, q, stops, start, chunks) do
     case :binary.at(src, pos) do
       ^q ->
         {:ok, pos + 1, Enum.reverse([{:static, start, pos} | chunks])}
 
-      ?{ when interp ->
+      ?{ ->
         case ElixirExpr.scan_expr(src, pos + 1, false) do
           {:ok, next, _} ->
-            scan_quoted_value(src, next, q, interp, next, [
+            scan_quoted_value(src, next, q, stops, next, [
               {:dynamic, pos, next},
               {:static, start, pos} | chunks
             ])
@@ -204,9 +201,6 @@ defmodule TailwindSort.Template do
           :error ->
             :error
         end
-
-      _ ->
-        scan_quoted_value(src, pos + 1, q, interp, start, chunks)
     end
   end
 
