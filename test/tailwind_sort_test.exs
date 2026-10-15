@@ -76,6 +76,44 @@ defmodule TailwindSortTest do
                ~S|<.btn class={["flex p-4", @on && "bg-red-500 px-2", "mt-#{@n} flex p-2"]} />|
     end
 
+    test "sorts each line of a heredoc inside class={...} on its own" do
+      src = ~s'''
+      <div class={"""
+        bg-stone-500 border border-green-700
+        font-bold text-lg text-green-200
+        flex flex-col gap-2
+      """}></div>
+      '''
+
+      assert format_heex(src) == ~s'''
+             <div class={"""
+               border border-green-700 bg-stone-500
+               text-lg font-bold text-green-200
+               flex flex-col gap-2
+             """}></div>
+             '''
+    end
+
+    test "keeps the space where strings join with <>" do
+      src =
+        ~s|<div class={"bg-stone-500 border border-green-700 " <> "font-bold text-lg text-green-200 " <> "flex flex-col gap-2"}></div>|
+
+      assert format_heex(src) ==
+               ~s|<div class={"border border-green-700 bg-stone-500 " <> "text-lg font-bold text-green-200 " <> "flex flex-col gap-2"}></div>|
+    end
+
+    test "keeps the space where strings join with <> across lines" do
+      src = ~s'''
+      <div class={"bg-stone-500 border border-green-700 " <>
+        "font-bold text-lg text-green-200 " <> "flex flex-col gap-2"}></div>
+      '''
+
+      assert format_heex(src) == ~s'''
+             <div class={"border border-green-700 bg-stone-500 " <>
+               "text-lg font-bold text-green-200 " <> "flex flex-col gap-2"}></div>
+             '''
+    end
+
     test "leaves everything that is not a class attribute alone" do
       src = ~S'''
       <%!-- <div class="p-4 flex"> --%>

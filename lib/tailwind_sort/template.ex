@@ -251,14 +251,10 @@ defmodule TailwindSort.Template do
         scan_expr(src, pos + 1, depth + 1, collect, strings)
 
       ~s(""") ->
-        scan_expr(src, skip_past(src, pos + 3, ~s(""")), depth, collect, strings)
+        scan_string_literal(src, pos, ~s("""), depth, collect, strings)
 
       <<q, _::binary>> when q in [?", ?'] ->
-        case scan_string(src, pos + 1, q, pos + 1, []) do
-          {:ok, next, chunks} when collect and q == ?" -> scan_expr(src, next, depth, collect, [chunks | strings])
-          {:ok, next, _} -> scan_expr(src, next, depth, collect, strings)
-          :error -> :error
-        end
+        scan_string_literal(src, pos, <<q>>, depth, collect, strings)
 
       _ ->
         scan_expr(src, skip_expr_token(src, pos), depth, collect, strings)
@@ -283,17 +279,90 @@ defmodule TailwindSort.Template do
     end
   end
 
-  defp scan_string(src, pos, _q, _start, _chunks) when pos >= byte_size(src), do: :error
+  # A string next to `<>` treats that end like `#{}`: whitespace stays and a glued class stays put.
+  # A zero-width dynamic chunk marks that end.
+  defp scan_string_literal(src, pos, close, depth, collect, strings) do
+    start = pos + byte_size(close)
 
-  defp scan_string(src, pos, q, start, chunks) do
-    case binary_part(src, pos, min(2, byte_size(src) - pos)) do
+    case scan_string(src, start, close, start, []) do
+      {:ok, next, chunks} when collect and close != "'" ->
+        stop = next - byte_size(close)
+        lines = if close == ~s("""), do: split_heredoc_lines(src, chunks), else: [chunks]
+
+        lines =
+          if concat_glues_left?(src, pos),
+            do: List.update_at(lines, 0, &[{:dynamic, start, start} | &1]),
+            else: lines
+
+        lines =
+          if concat_after?(src, next),
+            do: List.update_at(lines, -1, &(&1 ++ [{:dynamic, stop, stop}])),
+            else: lines
+
+        scan_expr(src, next, depth, collect, Enum.reverse(lines, strings))
+
+      {:ok, next, _} ->
+        scan_expr(src, next, depth, collect, strings)
+
+      :error ->
+        :error
+    end
+  end
+
+  # Each heredoc line sorts on its own. Its indent and newline stay out of the chunks, since Elixir
+  # needs the newline after the opening `"""` and strips the closing indent from each line.
+  defp split_heredoc_lines(src, chunks) do
+    {lines, line} =
+      Enum.reduce(chunks, {[], []}, fn
+        {:dynamic, _, _} = chunk, {lines, line} ->
+          {lines, [chunk | line]}
+
+        {:static, s, e}, {lines, line} ->
+          cuts = for {i, _} <- :binary.matches(src, "\n", scope: {s, e - s}), do: i
+          [first | rest] = Enum.zip_with([s | Enum.map(cuts, &(&1 + 1))], cuts ++ [e], &{:static, &1, &2})
+          Enum.reduce(rest, {lines, [first | line]}, fn seg, {lines, line} -> {[Enum.reverse(line) | lines], [seg]} end)
+      end)
+
+    [Enum.reverse(line) | lines]
+    |> Enum.reverse()
+    |> Enum.map(fn line ->
+      line
+      |> List.update_at(0, fn {:static, s, e} -> {:static, min(skip_ws(src, s), e), e} end)
+      |> List.update_at(-1, fn {:static, s, e} -> {:static, s, max(skip_ws_back(src, e), s)} end)
+    end)
+  end
+
+  # `"a " <> "b"` cannot glue, so "b" may move. Anything else left of `<>` might glue onto "b".
+  defp concat_glues_left?(src, pos) do
+    case skip_ws_back(src, pos) do
+      p when p >= 2 and binary_part(src, p - 2, 2) == "<>" ->
+        left = skip_ws_back(src, p - 2)
+        left < 2 or binary_part(src, left - 2, 2) not in [~s( "), ~s(\t"), ~s(\n")]
+
+      _ ->
+        false
+    end
+  end
+
+  defp concat_after?(src, pos), do: peek_bytes(src, skip_ws(src, pos), 2) == "<>"
+
+  defp skip_ws_back(src, pos) do
+    if pos > 0 and :binary.at(src, pos - 1) in ~c" \t\r\n",
+      do: skip_ws_back(src, pos - 1),
+      else: pos
+  end
+
+  defp scan_string(src, pos, _close, _start, _chunks) when pos >= byte_size(src), do: :error
+
+  defp scan_string(src, pos, close, start, chunks) do
+    case peek_bytes(src, pos, 2) do
       <<?\\, _>> ->
-        scan_string(src, pos + 2, q, start, chunks)
+        scan_string(src, pos + 2, close, start, chunks)
 
       "\#{" ->
         case scan_expr(src, pos + 2, 1, false, []) do
           {:ok, next, _} ->
-            scan_string(src, next, q, next, [
+            scan_string(src, next, close, next, [
               {:dynamic, pos, next},
               {:static, start, pos} | chunks
             ])
@@ -302,11 +371,10 @@ defmodule TailwindSort.Template do
             :error
         end
 
-      <<^q, _::binary>> ->
-        {:ok, pos + 1, Enum.reverse([{:static, start, pos} | chunks])}
-
       _ ->
-        scan_string(src, pos + 1, q, start, chunks)
+        if peek_bytes(src, pos, byte_size(close)) == close,
+          do: {:ok, pos + byte_size(close), Enum.reverse([{:static, start, pos} | chunks])},
+          else: scan_string(src, pos + 1, close, start, chunks)
     end
   end
 
