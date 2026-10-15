@@ -49,7 +49,7 @@ defmodule TailwindSort.Design do
 
   @doc """
   Loads the design for a stylesheet path, or the default theme when the path is nil.
-  We cache one design per path and options, and rebuild it when the file's mtime changes.
+  We cache one design per path and options, and rebuild it when the CSS changes, imports included.
 
   The only option is `:icon_prefix`. It defaults to `"hero-"`, and `nil` turns icon classes off.
   """
@@ -57,22 +57,19 @@ defmodule TailwindSort.Design do
   def load_design(stylesheet \\ nil, opts \\ []) do
     icon_prefix = Keyword.get(opts, :icon_prefix, @default_icon_prefix)
     key = {__MODULE__, stylesheet && Path.expand(stylesheet), icon_prefix}
-    mtime = read_mtime(stylesheet)
+    css = Stylesheet.read_css_with_imports(stylesheet)
 
     case :persistent_term.get(key, nil) do
-      {^mtime, design} ->
+      {^css, design} ->
         design
 
       _ ->
-        design = build_design(Stylesheet.read_stylesheet(stylesheet), icon_prefix: icon_prefix)
-        design = %{design | cache_key: {key, mtime}}
-        :persistent_term.put(key, {mtime, design})
+        design = build_design(Stylesheet.parse_stylesheet(css), icon_prefix: icon_prefix)
+        design = %{design | cache_key: {key, :erlang.unique_integer()}}
+        :persistent_term.put(key, {css, design})
         design
     end
   end
-
-  defp read_mtime(nil), do: nil
-  defp read_mtime(path), do: File.stat!(path, time: :posix).mtime
 
   @spec load_tailwind_data() :: map()
   def load_tailwind_data do

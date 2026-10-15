@@ -10,10 +10,22 @@ defmodule TailwindSort.DesignTest do
     Design.load_design(css)
     count = :persistent_term.info().count
 
-    File.touch!(css, System.os_time(:second) + 60)
+    File.write!(css, "@theme { --color-other: red; }", [:append])
     Design.load_design(css)
 
     assert :persistent_term.info().count == count
+  end
+
+  @tag :tmp_dir
+  test "sorts with the new theme after an imported file changes", %{tmp_dir: dir} do
+    css = Path.join(dir, "app.css")
+    File.write!(css, ~s(@import "tailwindcss";\n@import "./theme.css";))
+    File.write!(Path.join(dir, "theme.css"), "")
+    assert TailwindSort.sort_classes("p-4 content-auto", stylesheet: css) == "content-auto p-4"
+
+    File.write!(Path.join(dir, "theme.css"), "@utility content-auto { content-visibility: auto; }")
+
+    assert TailwindSort.sort_classes("p-4 content-auto", stylesheet: css) == "p-4 content-auto"
   end
 
   @tag :tmp_dir
@@ -23,7 +35,6 @@ defmodule TailwindSort.DesignTest do
     assert TailwindSort.sort_classes("p-4 content-auto", stylesheet: css) == "content-auto p-4"
 
     File.write!(css, ~s(@import "tailwindcss";\n@utility content-auto { content-visibility: auto; }))
-    File.touch!(css, System.os_time(:second) + 60)
 
     assert TailwindSort.sort_classes("p-4 content-auto", stylesheet: css) == "p-4 content-auto"
   end

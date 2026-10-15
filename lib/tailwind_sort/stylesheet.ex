@@ -19,12 +19,10 @@ defmodule TailwindSort.Stylesheet do
   @type css_node ::
           {:at, String.t()} | {:decl, String.t(), String.t()} | {:block, String.t(), [css_node()]}
 
-  @spec read_stylesheet(Path.t() | nil) :: t()
-  def read_stylesheet(nil), do: %__MODULE__{}
-
-  def read_stylesheet(path) do
-    path |> load_css_with_imports([]) |> parse_stylesheet()
-  end
+  @doc "Reads the stylesheet at `path` with its local imports inlined. A nil path gives empty CSS."
+  @spec read_css_with_imports(Path.t() | nil) :: String.t()
+  def read_css_with_imports(nil), do: ""
+  def read_css_with_imports(path), do: load_css_with_imports(path, [])
 
   @spec parse_stylesheet(css :: String.t()) :: t()
   def parse_stylesheet(css) do
