@@ -27,4 +27,27 @@ defmodule TailwindSort.StylesheetTest do
 
     assert css.utilities == [{"tab-*", [{"tab-size", "--value(integer)"}]}]
   end
+
+  describe "read_css_with_imports/1" do
+    test "gives empty CSS without a path" do
+      assert Stylesheet.read_css_with_imports(nil) == ""
+    end
+
+    @tag :tmp_dir
+    test "inlines local imports and leaves package imports alone", %{tmp_dir: dir} do
+      File.write!(Path.join(dir, "app.css"), ~s(@import "tailwindcss";\n@import "./theme.css";))
+      File.write!(Path.join(dir, "theme.css"), "@theme { --color-brand: #123; }")
+
+      assert Stylesheet.read_css_with_imports(Path.join(dir, "app.css")) ==
+               ~s(@import "tailwindcss";\n@theme { --color-brand: #123; })
+    end
+
+    @tag :tmp_dir
+    test "reads each file once when imports loop", %{tmp_dir: dir} do
+      File.write!(Path.join(dir, "a.css"), ~s(a{}@import "./b.css";))
+      File.write!(Path.join(dir, "b.css"), ~s(b{}@import "./a.css";))
+
+      assert Stylesheet.read_css_with_imports(Path.join(dir, "a.css")) == "a{}b{}"
+    end
+  end
 end

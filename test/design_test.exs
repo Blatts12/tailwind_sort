@@ -38,4 +38,50 @@ defmodule TailwindSort.DesignTest do
 
     assert TailwindSort.sort_classes("p-4 content-auto", stylesheet: css) == "p-4 content-auto"
   end
+
+  test "load_tailwind_data/0 reads data generated from the pinned tailwindcss version" do
+    assert Design.load_tailwind_data().version == "4.3.3"
+  end
+
+  describe "build_design/2" do
+    setup do
+      css = ~S"""
+      @import "tailwindcss" prefix(tw);
+      @theme { --color-brand: #123; }
+      @custom-variant pointer (@media (pointer: fine));
+      @utility content-auto { content-visibility: auto; }
+      """
+
+      %{d: Design.build_design(TailwindSort.Stylesheet.parse_stylesheet(css))}
+    end
+
+    test "adds theme keys from the stylesheet", %{d: d} do
+      assert Design.theme_has_key?(d, "--color", "brand")
+    end
+
+    test "registers custom variants and utilities", %{d: d} do
+      assert Map.has_key?(d.variants, "pointer")
+      assert "content-auto" in d.static
+    end
+
+    test "keeps the prefix", %{d: d} do
+      assert d.prefix == "tw"
+    end
+  end
+
+  describe "theme_has_key?/3" do
+    setup do
+      %{d: Design.load_design()}
+    end
+
+    test "finds a key in a namespace", %{d: d} do
+      assert Design.theme_has_key?(d, "--color", "red-500")
+      refute Design.theme_has_key?(d, "--color", "nope")
+    end
+
+    test "skips keys that belong to a more specific namespace", %{d: d} do
+      assert Map.has_key?(d.theme, "--text-shadow-sm")
+      refute Design.theme_has_key?(d, "--text", "shadow-sm")
+    end
+  end
 end

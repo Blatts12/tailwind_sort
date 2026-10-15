@@ -6,6 +6,13 @@ defmodule TailwindSortTest do
   defp format_heex(src), do: TailwindSort.format(src, extension: ".heex")
   defp format_holo(src), do: TailwindSort.format(src, extension: ".holo")
 
+  test "features/1 registers the template sigils and extensions with mix format" do
+    features = TailwindSort.features([])
+
+    assert :H in features[:sigils]
+    assert features[:extensions] == [".heex", ".holo"]
+  end
+
   describe "sort/2" do
     test "unknown classes first, `...` last, known duplicates removed" do
       assert TailwindSort.sort_classes("p-4 my-thing flex ... flex my-thing") ==
