@@ -18,6 +18,7 @@ defmodule TailwindSort.Utility do
   """
 
   alias TailwindSort.Candidate
+  alias TailwindSort.CustomUtility
   alias TailwindSort.DataType
   alias TailwindSort.Design
   alias TailwindSort.Text
@@ -40,39 +41,10 @@ defmodule TailwindSort.Utility do
   def compute_signature({:functional, root, value, modifier} = parse, d) do
     custom =
       for {sig, rules} <- Map.get(d.custom_functional, root, []),
-          custom_utility_accepts?(rules, value, modifier, d),
+          CustomUtility.custom_utility_accepts?(rules, value, modifier, d),
           do: sig
 
     pick_min_signature([compute_core_signature(parse, d) | custom])
-  end
-
-  defp custom_utility_accepts?(:icon, value, modifier, _d), do: match?({:named, _}, value) and modifier == nil
-
-  defp custom_utility_accepts?(_rules, nil, _modifier, _d), do: false
-
-  defp custom_utility_accepts?(rules, value, modifier, d),
-    do: (modifier == nil or rules.modifier) and rules_accept_value?(value, rules, d)
-
-  defp rules_accept_value?(_value, %{any_value: true}, _d), do: true
-
-  defp rules_accept_value?({:named, v}, rules, d) do
-    v in rules.literal or Enum.any?(rules.ns, &Design.theme_has_key?(d, &1, v)) or
-      Enum.any?(rules.bare, fn
-        "any" -> true
-        "integer" -> Text.digits?(v)
-        "number" -> quarter_multiple?(v) or Text.digits?(v)
-        "percentage" -> percent_value?(v, &Text.digits?/1)
-        "ratio" -> false
-      end)
-  end
-
-  defp rules_accept_value?({:arbitrary, hint, v}, rules, d) do
-    types = DataType.infer_types(v, d.named_colors)
-
-    Enum.any?(rules.arbitrary, fn
-      "*" -> true
-      t -> if hint, do: hint == t, else: types != :var and MapSet.member?(types, t)
-    end)
   end
 
   defp compute_core_signature({:functional, root, {:named, v}, modifier}, d) do
@@ -123,21 +95,11 @@ defmodule TailwindSort.Utility do
   defp to_value_group(v, d) do
     cond do
       Text.digits?(v) -> :int
-      Text.decimal?(v) -> if(quarter_multiple?(v), do: :dec25, else: :dec)
-      percent_value?(v, &Text.digits?/1) -> :pct
-      percent_value?(v, &Text.decimal?/1) -> :pctdec
+      Text.decimal?(v) -> if(Text.quarter_multiple?(v), do: :dec25, else: :dec)
+      Text.percent_value?(v, &Text.digits?/1) -> :pct
+      Text.percent_value?(v, &Text.decimal?/1) -> :pctdec
       MapSet.member?(d.keywords, v) -> {:kw, v}
       true -> :word
-    end
-  end
-
-  defp percent_value?(v, number?), do: String.ends_with?(v, "%") and number?.(binary_part(v, 0, byte_size(v) - 1))
-
-  # Port of isValidSpacingMultiplier. The value must be a multiple of 0.25, written the way JS prints numbers.
-  defp quarter_multiple?(v) do
-    case Float.parse(v) do
-      {f, ""} -> Float.to_string(f) == v and f * 4 == Float.round(f * 4)
-      _ -> false
     end
   end
 
@@ -183,7 +145,7 @@ defmodule TailwindSort.Utility do
     cond do
       ns -> ns
       Text.digits?(m) -> :int
-      Text.decimal?(m) -> if(quarter_multiple?(m), do: :dec25, else: :dec)
+      Text.decimal?(m) -> if(Text.quarter_multiple?(m), do: :dec25, else: :dec)
       true -> :word
     end
   end

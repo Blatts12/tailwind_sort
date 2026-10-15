@@ -6,6 +6,7 @@ defmodule TailwindSort.Candidate do
   `tailwindcss/src/candidate.ts`. A class Tailwind would reject parses to `nil`.
   """
 
+  alias TailwindSort.ArbitraryValue
   alias TailwindSort.Design
   alias TailwindSort.Text
   alias TailwindSort.Variant
@@ -121,8 +122,8 @@ defmodule TailwindSort.Candidate do
   end
 
   defp decode_and_validate_value(raw_value) do
-    value = Text.decode_arbitrary_value(raw_value)
-    if Text.valid_arbitrary_value?(value), do: {:ok, value}, else: :error
+    value = ArbitraryValue.decode_arbitrary_value(raw_value)
+    if ArbitraryValue.valid_arbitrary_value?(value), do: {:ok, value}, else: :error
   end
 
   defp find_utility_roots(b, d) do
@@ -166,7 +167,7 @@ defmodule TailwindSort.Candidate do
   # `(--x)` stands for `[var(--x)]`, and `(color:--x)` for `[color:var(--x)]`.
   defp expand_var_shorthand(inner) do
     with {type, "--" <> _ = var} <- split_var_shorthand(Text.split_top_level(inner, ":")),
-         true <- Text.valid_arbitrary_value?(var) do
+         true <- ArbitraryValue.valid_arbitrary_value?(var) do
       {:ok, "[#{type}var(#{var})]"}
     else
       _ -> :error
@@ -207,9 +208,9 @@ defmodule TailwindSort.Candidate do
   end
 
   defp parse_arbitrary_value(raw) do
-    v = Text.decode_arbitrary_value(raw)
+    v = ArbitraryValue.decode_arbitrary_value(raw)
 
-    if Text.valid_arbitrary_value?(v) do
+    if ArbitraryValue.valid_arbitrary_value?(v) do
       {hint, v} =
         case :binary.split(v, ":") do
           [hint, rest] -> if type_hint?(hint), do: {hint, rest}, else: {nil, v}
@@ -227,7 +228,7 @@ defmodule TailwindSort.Candidate do
   @spec parse_modifier(modifier :: String.t()) :: modifier()
   def parse_modifier("[" <> _ = m) do
     if String.ends_with?(m, "]") do
-      with v when v != nil <- Text.decode_valid_arbitrary_value(binary_part(m, 1, byte_size(m) - 2)),
+      with v when v != nil <- ArbitraryValue.decode_valid_arbitrary_value(binary_part(m, 1, byte_size(m) - 2)),
            do: {:arbitrary, v}
     else
       parse_named_modifier(m)
@@ -238,7 +239,7 @@ defmodule TailwindSort.Candidate do
     if String.ends_with?(m, ")") do
       inner = binary_part(m, 1, byte_size(m) - 2)
 
-      if String.starts_with?(inner, "--") and Text.valid_arbitrary_value?(inner),
+      if String.starts_with?(inner, "--") and ArbitraryValue.valid_arbitrary_value?(inner),
         do: {:var, "var(#{inner})"}
     else
       parse_named_modifier(m)

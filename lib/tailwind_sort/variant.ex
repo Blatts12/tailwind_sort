@@ -6,6 +6,7 @@ defmodule TailwindSort.Variant do
   from `variants.ts`, and `compareBreakpoints` from `utils/compare-breakpoints.ts`.
   """
 
+  alias TailwindSort.ArbitraryValue
   alias TailwindSort.Candidate
   alias TailwindSort.Design
   alias TailwindSort.Text
@@ -29,7 +30,7 @@ defmodule TailwindSort.Variant do
 
     if at_rule_with_ampersand?(inner),
       do: nil,
-      else: inner |> Text.decode_valid_arbitrary_value() |> build_arbitrary_variant(raw)
+      else: inner |> ArbitraryValue.decode_valid_arbitrary_value() |> build_arbitrary_variant(raw)
   end
 
   defp at_rule_with_ampersand?(inner), do: String.starts_with?(inner, "@") and String.contains?(inner, "&")
@@ -126,7 +127,7 @@ defmodule TailwindSort.Variant do
   end
 
   defp parse_arbitrary_value(value, form) do
-    case Text.decode_valid_arbitrary_value(binary_part(value, 1, byte_size(value) - 2)) do
+    case ArbitraryValue.decode_valid_arbitrary_value(binary_part(value, 1, byte_size(value) - 2)) do
       nil -> nil
       "--" <> _ = v when form == :var -> {:arbitrary, "var(#{v})", :var}
       _ when form == :var -> nil

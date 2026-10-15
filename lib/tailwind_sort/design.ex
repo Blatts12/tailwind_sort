@@ -6,9 +6,10 @@ defmodule TailwindSort.Design do
   like theme keys, custom variants and custom utilities.
   """
 
+  alias TailwindSort.ArbitraryValue
+  alias TailwindSort.CustomUtility
   alias TailwindSort.DataType
   alias TailwindSort.Stylesheet
-  alias TailwindSort.Text
 
   defstruct [
     :version,
@@ -43,9 +44,6 @@ defmodule TailwindSort.Design do
   @data_key {__MODULE__, :data}
 
   @default_icon_prefix "hero-"
-
-  # Declarations that Phoenix's heroicons plugin in assets/vendor/heroicons.js emits, in that order.
-  @icon_decls ~w(--icon -webkit-mask mask mask-repeat background-color vertical-align display width height)
 
   @doc """
   Loads the design for a stylesheet path, or the default theme when the path is nil.
@@ -102,13 +100,11 @@ defmodule TailwindSort.Design do
       d.corpus
       |> Enum.with_index()
       |> Enum.reduce(%{}, fn {raw, i}, acc ->
-        Map.put_new(acc, DataType.infer_types(Text.decode_arbitrary_value(raw), named_colors), i)
+        Map.put_new(acc, DataType.infer_types(ArbitraryValue.decode_arbitrary_value(raw), named_colors), i)
       end)
 
-    {custom_static, custom_functional} = split_custom_utilities(css.utilities, property_index)
-
-    custom_functional =
-      put_icon_root(custom_functional, Keyword.get(opts, :icon_prefix), property_index)
+    {custom_static, custom_functional} =
+      CustomUtility.build_custom_utilities(css.utilities, Keyword.get(opts, :icon_prefix), property_index)
 
     put_variants(
       %__MODULE__{
@@ -232,64 +228,5 @@ defmodule TailwindSort.Design do
           {:cont, Bitwise.bor(acc, 2)}
       end
     end)
-  end
-
-  defp split_custom_utilities(utilities, property_index) do
-    Enum.reduce(utilities, {%{}, %{}}, fn {name, decls}, {static, functional} ->
-      sig = compute_decls_signature(decls, property_index)
-
-      if String.ends_with?(name, "-*") do
-        entry = {sig, parse_value_rules(decls)}
-        {static, Map.update(functional, String.trim_trailing(name, "-*"), [entry], &[entry | &1])}
-      else
-        {Map.update(static, name, [sig], &[sig | &1]), functional}
-      end
-    end)
-  end
-
-  defp parse_value_rules(decls) do
-    body = Enum.map_join(decls, ";", &elem(&1, 1))
-
-    args =
-      ~r/--value\(([^)]*)\)/
-      |> Regex.scan(body, capture: :all_but_first)
-      |> Enum.flat_map(fn [a] -> a |> String.split(",") |> Enum.map(&String.trim/1) end)
-
-    %{
-      any_value: args == [],
-      modifier: String.contains?(body, "--modifier("),
-      ns: for("--" <> _ = a <- args, String.ends_with?(a, "-*"), do: String.trim_trailing(a, "-*")),
-      bare: for(a <- args, a in ~w(integer number percentage ratio any), do: a),
-      literal: for(<<q, _::binary>> = a <- args, q in [?", ?'], do: String.slice(a, 1..-2//1)),
-      arbitrary: for("[" <> _ = a <- args, do: String.slice(a, 1..-2//1))
-    }
-  end
-
-  # Icon classes like `<prefix><name>` behave like Phoenix's heroicons plugin. The `hero` root is
-  # functional, accepts any named value and takes no modifier. We don't check names against the
-  # icon set, so a typo sorts like a real icon instead of moving to the front.
-  defp put_icon_root(functional, prefix, _index) when prefix in [nil, false, ""], do: functional
-
-  defp put_icon_root(functional, prefix, index) when is_binary(prefix) do
-    root = String.trim_trailing(prefix, "-")
-    sig = compute_decls_signature(Enum.map(@icon_decls, &{&1, ""}), index)
-    Map.update(functional, root, [{sig, :icon}], &[{sig, :icon} | &1])
-  end
-
-  # Mirrors getPropertySort for declarations collected in breadth first order.
-  defp compute_decls_signature(decls, index) do
-    {order, _} =
-      Enum.reduce(decls, {MapSet.new(), false}, fn
-        _, {set, true} ->
-          {set, true}
-
-        {"--tw-sort", v}, {set, false} when is_map_key(index, v) ->
-          {MapSet.put(set, index[v]), true}
-
-        {p, _}, {set, false} ->
-          {if(i = index[p], do: MapSet.put(set, i), else: set), false}
-      end)
-
-    {order |> MapSet.to_list() |> Enum.sort(), length(decls)}
   end
 end
