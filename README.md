@@ -46,6 +46,8 @@ All options live under the `:tailwind_sort` key.
 | `class={["a b", @x && "c d"]}`     | Every string literal gets sorted.                                           |
 | `"mt-#{@n} p-2 flex"`              | Chunks around `#{}` get sorted. Tokens glued to the interpolation stay put. |
 | `class="p-4 {@x} flex"` (Hologram) | Same chunking around `{...}`.                                               |
+| `"p-4 " <> @x`                     | Whitespace at `<>` stays. A class touching `<>` without a space stays put.  |
+| Heredoc in `class={...}`           | Each line gets sorted on its own and keeps its indent.                      |
 
 Unknown classes go first in their original order, just like in the prettier plugin. `...` goes last, and repeated
 known classes go away.

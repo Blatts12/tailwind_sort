@@ -114,6 +114,85 @@ defmodule TailwindSortTest do
              '''
     end
 
+    test "keeps a class glued to <> in place" do
+      assert format_heex(~S|<div class={"p-4 flex text-" <> @color}></div>|) ==
+               ~S|<div class={"flex p-4 text-" <> @color}></div>|
+    end
+
+    test "sorts the first class after <> when the left string ends in an escaped newline" do
+      assert format_heex(~S|<div class={"font-bold\n" <> "p-4 flex"}></div>|) ==
+               ~S|<div class={"font-bold\n" <> "flex p-4"}></div>|
+    end
+
+    test "keeps a class glued to <> when the left string ends in an escaped backslash" do
+      src = ~S|<div class={"x\\n" <> "p-4 flex"}></div>|
+      assert format_heex(src) == src
+    end
+
+    test "sorts the last class before <> when the right string starts with a space" do
+      assert format_heex(~S|<div class={"p-4 flex" <> " mt-2"}></div>|) ==
+               ~S|<div class={"flex p-4" <> " mt-2"}></div>|
+    end
+
+    test "keeps the space in a string nested inside a <> operand" do
+      src = ~S|<div class={@class <> if(@active, do: " ring-2 ring-blue-500", else: "")}></div>|
+      assert format_heex(src) == src
+    end
+
+    test "sees <> past a comment" do
+      assert format_heex("<div class={\"p-4 flex hover:\" # base\n  <> @x}></div>") ==
+               "<div class={\"flex p-4 hover:\" # base\n  <> @x}></div>"
+    end
+
+    test "keeps the first heredoc line in place when it glues onto the left of <>" do
+      src = ~s'''
+      <div class={"hover:" <> """
+        p-4 flex
+        """}></div>
+      '''
+
+      assert format_heex(src) == src
+    end
+
+    test "sorts the string after <> when a heredoc ends on the left" do
+      src = ~s'''
+      <div class={"""
+        p-4 flex
+        """ <> "block mt-2"}></div>
+      '''
+
+      assert format_heex(src) == ~s'''
+             <div class={"""
+               flex p-4
+               """ <> "mt-2 block"}></div>
+             '''
+    end
+
+    test "leaves heredoc lines joined by a trailing backslash alone" do
+      src = ~S'''
+      <div class={"""
+        hover:\
+        p-4 flex
+      """}></div>
+      '''
+
+      assert format_heex(src) == src
+    end
+
+    test "keeps sorting after a heredoc with a mid-line triple quote" do
+      src = ~s'''
+      <div class={"""
+        p-4 flex """ x
+        """}></div><p class="p-4 flex"></p>
+      '''
+
+      assert format_heex(src) == ~s'''
+             <div class={"""
+               p-4 flex """ x
+               """}></div><p class="flex p-4"></p>
+             '''
+    end
+
     test "leaves everything that is not a class attribute alone" do
       src = ~S'''
       <%!-- <div class="p-4 flex"> --%>

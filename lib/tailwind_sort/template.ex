@@ -7,6 +7,9 @@ defmodule TailwindSort.Template do
     * `class="..."` sorts the whole value.
     * `class={...}` sorts every Elixir string literal inside. `#{}` splits a literal into
       chunks, and we sort each chunk around the interpolation.
+    * In a heredoc, each line sorts on its own and keeps its indent.
+    * Next to `<>`, a string keeps its whitespace. A class touching `<>` with no space
+      stays in place, since it may glue onto the other side.
     * `class="a {@b} c"` uses the same chunking, for Hologram only (`interpolate_quoted: true`).
   """
 
@@ -156,12 +159,10 @@ defmodule TailwindSort.Template do
 
       "{" ->
         case scan_expr(src, pos + 1, 1, true, []) do
-          {:ok, next, strings} ->
-            edits =
-              if sort?,
-                do: Enum.reduce(strings, edits, &build_chunk_edits(src, &1, ctx, &2)),
-                else: edits
+          {:ok, next, strings} when sort? ->
+            scan_attributes(src, next, ctx, build_expr_edits(src, pos + 1, next - 1, strings, ctx, edits))
 
+          {:ok, next, _} ->
             scan_attributes(src, next, ctx, edits)
 
           :error ->
@@ -205,7 +206,42 @@ defmodule TailwindSort.Template do
     end
   end
 
-  defp build_chunk_edits(src, chunks, ctx, edits) do
+  # The scanner finds the strings in `src[start..stop)`. The AST only tells which of them sit in a `<>`.
+  defp build_expr_edits(src, start, stop, strings, ctx, edits) do
+    expr = binary_part(src, start, stop - start)
+    encode = &{:ok, {:__block__, &2, [&1]}}
+
+    case Code.string_to_quoted(expr, columns: true, emit_warnings: false, literal_encoder: encode) do
+      {:ok, ast} ->
+        joins = collect_joined_edges(ast, :free, :free, %{})
+
+        for {open, lines} <- strings,
+            # The AST counts columns in codepoints, so UTF-8 continuation bytes don't count.
+            before = :binary.split(binary_part(src, start, open - start), "\n", [:global]),
+            column = Enum.count(:binary.bin_to_list(List.last(before)), &(&1 not in 0x80..0xBF)) + 1,
+            {lead, trail} = Map.get(joins, {length(before), column}, {:free, :free}),
+            last = length(lines) - 1,
+            {chunks, i} <- Enum.with_index(lines),
+            [reduce: edits] do
+          acc ->
+            build_chunk_edits(
+              src,
+              chunks,
+              ctx,
+              acc,
+              if(i == 0, do: lead, else: :free),
+              if(i == last, do: trail, else: :free)
+            )
+        end
+
+      {:error, _} ->
+        edits
+    end
+  end
+
+  # `lead` and `trail` say what touches the start and end of the string: `:free` for nothing,
+  # `:space` for `<>` with whitespace on the other side, `:glue` for `<>` with anything else.
+  defp build_chunk_edits(src, chunks, ctx, edits, lead \\ :free, trail \\ :free) do
     statics = for {:static, _, _} = c <- chunks, do: c
     last = length(chunks) - 1
 
@@ -221,14 +257,15 @@ defmodule TailwindSort.Template do
         opts =
           ctx.sort_opts ++
             [
-              ignore_first: i > 0 and Text.trim_leading_whitespace(old) == old,
-              ignore_last: i < last and Text.trim_trailing_whitespace(old) == old,
-              collapse_start: i == 0,
-              collapse_end: i == last
+              ignore_first: Text.trim_leading_whitespace(old) == old and (i > 0 or lead == :glue),
+              ignore_last: Text.trim_trailing_whitespace(old) == old and (i < last or trail == :glue),
+              collapse_start: i == 0 and lead == :free,
+              collapse_end: i == last and trail == :free
             ]
 
+        # A heredoc line may hold a `"""`, and moving it to the line start would close the heredoc.
         new =
-          if statics == [] or String.contains?(old, "\\"),
+          if statics == [] or String.contains?(old, ["\\", ~s(""")]),
             do: old,
             else: Sorter.sort_class_string(old, ctx.d, opts)
 
@@ -279,27 +316,47 @@ defmodule TailwindSort.Template do
     end
   end
 
-  # A string next to `<>` treats that end like `#{}`: whitespace stays and a glued class stays put.
-  # A zero-width dynamic chunk marks that end.
+  # Collects `{open_quote_pos, lines}` per double-quoted string, where each line is a chunk list.
   defp scan_string_literal(src, pos, close, depth, collect, strings) do
     start = pos + byte_size(close)
 
     case scan_string(src, start, close, start, []) do
-      {:ok, next, chunks} when collect and close != "'" ->
-        stop = next - byte_size(close)
-        lines = if close == ~s("""), do: split_heredoc_lines(src, chunks), else: [chunks]
+      {:ok, next, chunks} when collect and close == ~s(") ->
+        scan_expr(src, next, depth, collect, [{pos, [chunks]} | strings])
+
+      # Each heredoc line sorts on its own. Indents and newlines stay out of the chunks, since
+      # Elixir needs them. A `\` before the newline joins two lines, so we don't cut there.
+      # The first line is the rest of the opening `"""` line, which holds no classes.
+      {:ok, next, chunks} when collect ->
+        {lines, line} =
+          Enum.reduce(chunks, {[], []}, fn
+            {:dynamic, _, _} = chunk, {lines, line} ->
+              {lines, [chunk | line]}
+
+            {:static, s, e}, {lines, line} ->
+              cuts =
+                for {i, _} <- :binary.matches(src, "\n", scope: {s, e - s}),
+                    not String.ends_with?(binary_part(src, s, i - s), ["\\", "\\\r"]),
+                    do: i
+
+              [first | rest] = Enum.zip_with([s | Enum.map(cuts, &(&1 + 1))], cuts ++ [e], &{:static, &1, &2})
+
+              Enum.reduce(rest, {lines, [first | line]}, fn seg, {lines, line} ->
+                {[Enum.reverse(line) | lines], [seg]}
+              end)
+          end)
 
         lines =
-          if concat_glues_left?(src, pos),
-            do: List.update_at(lines, 0, &[{:dynamic, start, start} | &1]),
-            else: lines
+          [Enum.reverse(line) | lines]
+          |> Enum.reverse()
+          |> tl()
+          |> Enum.map(fn line ->
+            line
+            |> List.update_at(0, fn {:static, s, e} -> {:static, min(skip_ws(src, s), e), e} end)
+            |> List.update_at(-1, fn {:static, s, e} -> {:static, s, max(skip_ws_back(src, e), s)} end)
+          end)
 
-        lines =
-          if concat_after?(src, next),
-            do: List.update_at(lines, -1, &(&1 ++ [{:dynamic, stop, stop}])),
-            else: lines
-
-        scan_expr(src, next, depth, collect, Enum.reverse(lines, strings))
+        scan_expr(src, next, depth, collect, [{pos, lines} | strings])
 
       {:ok, next, _} ->
         scan_expr(src, next, depth, collect, strings)
@@ -309,45 +366,49 @@ defmodule TailwindSort.Template do
     end
   end
 
-  # Each heredoc line sorts on its own. Its indent and newline stay out of the chunks, since Elixir
-  # needs the newline after the opening `"""` and strips the closing indent from each line.
-  defp split_heredoc_lines(src, chunks) do
-    {lines, line} =
-      Enum.reduce(chunks, {[], []}, fn
-        {:dynamic, _, _} = chunk, {lines, line} ->
-          {lines, [chunk | line]}
-
-        {:static, s, e}, {lines, line} ->
-          cuts = for {i, _} <- :binary.matches(src, "\n", scope: {s, e - s}), do: i
-          [first | rest] = Enum.zip_with([s | Enum.map(cuts, &(&1 + 1))], cuts ++ [e], &{:static, &1, &2})
-          Enum.reduce(rest, {lines, [first | line]}, fn seg, {lines, line} -> {[Enum.reverse(line) | lines], [seg]} end)
-      end)
-
-    [Enum.reverse(line) | lines]
-    |> Enum.reverse()
-    |> Enum.map(fn line ->
-      line
-      |> List.update_at(0, fn {:static, s, e} -> {:static, min(skip_ws(src, s), e), e} end)
-      |> List.update_at(-1, fn {:static, s, e} -> {:static, s, max(skip_ws_back(src, e), s)} end)
-    end)
+  # Maps `{line, column}` of each string inside a `<>` to its `{lead, trail}`, as in
+  # build_chunk_edits. Like canCollapseWhitespaceIn in prettier-plugin-tailwindcss, a string
+  # anywhere inside an operand counts, so `@a <> if(@b, do: " p-4")` keeps its space.
+  defp collect_joined_edges({:<>, _, [left, right]}, lead, trail, acc) do
+    acc = collect_joined_edges(left, lead, read_string_edge(right, :first), acc)
+    collect_joined_edges(right, read_string_edge(left, :last), trail, acc)
   end
 
-  # `"a " <> "b"` cannot glue, so "b" may move. Anything else left of `<>` might glue onto "b".
-  defp concat_glues_left?(src, pos) do
-    case skip_ws_back(src, pos) do
-      p when p >= 2 and binary_part(src, p - 2, 2) == "<>" ->
-        left = skip_ws_back(src, p - 2)
-        left < 2 or binary_part(src, left - 2, 2) not in [~s( "), ~s(\t"), ~s(\n")]
-
-      _ ->
-        false
-    end
+  defp collect_joined_edges({form, meta, args} = string, lead, trail, acc)
+       when (form == :__block__ and is_list(args) and length(args) == 1 and is_binary(hd(args))) or form == :<<>> do
+    # A string can't glue on a side where it starts or ends in whitespace itself.
+    lead = if lead == :glue, do: read_string_edge(string, :first), else: lead
+    trail = if trail == :glue, do: read_string_edge(string, :last), else: trail
+    acc = if {lead, trail} == {:free, :free}, do: acc, else: Map.put(acc, {meta[:line], meta[:column]}, {lead, trail})
+    collect_joined_edges(args, lead, trail, acc)
   end
 
-  defp concat_after?(src, pos), do: peek_bytes(src, skip_ws(src, pos), 2) == "<>"
+  defp collect_joined_edges({form, _, args}, lead, trail, acc) when is_list(args),
+    do: collect_joined_edges([form | args], lead, trail, acc)
+
+  defp collect_joined_edges({a, b}, lead, trail, acc), do: collect_joined_edges([a, b], lead, trail, acc)
+
+  defp collect_joined_edges(nodes, lead, trail, acc) when is_list(nodes),
+    do: Enum.reduce(nodes, acc, &collect_joined_edges(&1, lead, trail, &2))
+
+  defp collect_joined_edges(_, _, _, acc), do: acc
+
+  # Whether the first or last character of an expression's value is whitespace, as far as we
+  # can tell without running it.
+  defp read_string_edge({:__block__, _, [s]}, :first) when is_binary(s),
+    do: if(Text.trim_leading_whitespace(s) == s, do: :glue, else: :space)
+
+  defp read_string_edge({:__block__, _, [s]}, :last) when is_binary(s),
+    do: if(Text.trim_trailing_whitespace(s) == s, do: :glue, else: :space)
+
+  defp read_string_edge({:<<>>, _, [part | _]}, :first), do: read_string_edge({:__block__, [], [part]}, :first)
+  defp read_string_edge({:<<>>, _, parts}, :last), do: read_string_edge({:__block__, [], [List.last(parts)]}, :last)
+  defp read_string_edge({:<>, _, [left, _]}, :first), do: read_string_edge(left, :first)
+  defp read_string_edge({:<>, _, [_, right]}, :last), do: read_string_edge(right, :last)
+  defp read_string_edge(_, _), do: :glue
 
   defp skip_ws_back(src, pos) do
-    if pos > 0 and :binary.at(src, pos - 1) in ~c" \t\r\n",
+    if pos > 0 and :binary.at(src, pos - 1) in ~c" \t\r",
       do: skip_ws_back(src, pos - 1),
       else: pos
   end
@@ -371,10 +432,12 @@ defmodule TailwindSort.Template do
             :error
         end
 
+      # A heredoc ends only at a `"""` that starts its own line.
       _ ->
-        if peek_bytes(src, pos, byte_size(close)) == close,
-          do: {:ok, pos + byte_size(close), Enum.reverse([{:static, start, pos} | chunks])},
-          else: scan_string(src, pos + 1, close, start, chunks)
+        if peek_bytes(src, pos, byte_size(close)) == close and
+             (close != ~s(""") or :binary.at(src, skip_ws_back(src, pos) - 1) == ?\n),
+           do: {:ok, pos + byte_size(close), Enum.reverse([{:static, start, pos} | chunks])},
+           else: scan_string(src, pos + 1, close, start, chunks)
     end
   end
 
