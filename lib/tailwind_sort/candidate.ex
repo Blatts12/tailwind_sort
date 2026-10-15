@@ -91,18 +91,31 @@ defmodule TailwindSort.Candidate do
   end
 
   defp parse_arbitrary_property(b, modifier) do
-    with true <- String.ends_with?(b, "]"),
-         <<?[, c, _::binary>> when c == ?- or c in ?a..?z <- b,
-         inner = binary_part(b, 1, byte_size(b) - 2),
-         {idx, _} when idx > 0 and idx < byte_size(inner) - 1 <- :binary.match(inner, ":"),
-         property = binary_part(inner, 0, idx),
-         value =
-           Text.decode_arbitrary_value(binary_part(inner, idx + 1, byte_size(inner) - idx - 1)),
-         true <- Text.valid_arbitrary_value?(value) do
+    with {:ok, inner} <- unwrap_property_brackets(b),
+         {:ok, property, raw_value} <- split_property_and_value(inner),
+         {:ok, value} <- decode_and_validate_value(raw_value) do
       [{:arbitrary, property, value, modifier}]
     else
-      _ -> []
+      :error -> []
     end
+  end
+
+  defp unwrap_property_brackets(<<?[, c, _::binary>> = b) when c == ?- or c in ?a..?z do
+    if String.ends_with?(b, "]"), do: {:ok, binary_part(b, 1, byte_size(b) - 2)}, else: :error
+  end
+
+  defp unwrap_property_brackets(_), do: :error
+
+  defp split_property_and_value(inner) do
+    case :binary.split(inner, ":") do
+      [property, raw_value] when property != "" and raw_value != "" -> {:ok, property, raw_value}
+      _ -> :error
+    end
+  end
+
+  defp decode_and_validate_value(raw_value) do
+    value = Text.decode_arbitrary_value(raw_value)
+    if Text.valid_arbitrary_value?(value), do: {:ok, value}, else: :error
   end
 
   defp find_utility_roots(b, d) do
