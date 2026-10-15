@@ -169,19 +169,24 @@ defmodule TailwindSort.Design do
   end
 
   defp put_variants(design, d, custom) do
-    core =
-      Map.new(d.variants, fn {name, kind, order, compounds, cw, _cmp} ->
+    variants =
+      d.variants
+      |> Map.new(fn {name, kind, order, compounds, cw, _cmp} ->
         {name, %{kind: kind, order: order, compounds: compounds, compounds_with: cw}}
       end)
+      |> Map.merge(build_breakpoint_variants(design.theme, d.breakpoint_order))
+      |> add_custom_variants(custom)
 
-    breakpoints =
-      for {"--breakpoint-" <> name, _} <- design.theme,
-          not String.contains?(name, "--"),
-          into: %{} do
-        {name, %{kind: :static, order: d.breakpoint_order, compounds: 1, compounds_with: 0}}
-      end
+    %{design | variants: variants, variant_cmp: build_variant_comparators(d.variants)}
+  end
 
-    variants = Map.merge(core, breakpoints)
+  defp build_breakpoint_variants(theme, order) do
+    for {"--breakpoint-" <> name, _} <- theme, not String.contains?(name, "--"), into: %{} do
+      {name, %{kind: :static, order: order, compounds: 1, compounds_with: 0}}
+    end
+  end
+
+  defp add_custom_variants(variants, custom) do
     max_order = variants |> Map.values() |> Enum.map(& &1.order) |> Enum.max()
 
     {variants, _} =
@@ -193,25 +198,21 @@ defmodule TailwindSort.Design do
             {Map.put(acc, name, %{existing | kind: :static, compounds: compounds}), last}
 
           _ ->
-            {Map.put(acc, name, %{
-               kind: :static,
-               order: last + 1,
-               compounds: compounds,
-               compounds_with: 0
-             }), last + 1}
+            {Map.put(acc, name, %{kind: :static, order: last + 1, compounds: compounds, compounds_with: 0}), last + 1}
         end
       end)
 
-    cmp =
-      Enum.reduce(d.variants, %{}, fn
-        {"max", _, o, _, _, true}, acc -> Map.put(acc, o, {:breakpoint, :desc})
-        {"min", _, o, _, _, true}, acc -> Map.put(acc, o, {:breakpoint, :asc})
-        {"@max", _, o, _, _, true}, acc -> Map.put(acc, o, {:container, :desc})
-        {"@min", _, o, _, _, true}, acc -> Map.put(acc, o, {:container, :asc})
-        _, acc -> acc
-      end)
+    variants
+  end
 
-    %{design | variants: variants, variant_cmp: cmp}
+  defp build_variant_comparators(core_variants) do
+    Enum.reduce(core_variants, %{}, fn
+      {"max", _, o, _, _, true}, acc -> Map.put(acc, o, {:breakpoint, :desc})
+      {"min", _, o, _, _, true}, acc -> Map.put(acc, o, {:breakpoint, :asc})
+      {"@max", _, o, _, _, true}, acc -> Map.put(acc, o, {:container, :desc})
+      {"@min", _, o, _, _, true}, acc -> Map.put(acc, o, {:container, :asc})
+      _, acc -> acc
+    end)
   end
 
   @doc "Port of compoundsForSelectors. Bit 1 stands for at-rules and bit 2 for style rules. 0 means never."

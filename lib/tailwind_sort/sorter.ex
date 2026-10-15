@@ -61,11 +61,9 @@ defmodule TailwindSort.Sorter do
   defp resolve_new_classes(classes, d) do
     parsed = Map.new(classes, &{&1, parse_class(&1, d)})
 
-    for_result = for({_, {variants, _}} <- parsed, v <- variants, do: v)
-
     produces_css =
-      for_result
-      |> Enum.uniq_by(& &1.raw)
+      parsed
+      |> list_used_variants()
       |> Map.new(&{&1.raw, Variant.produces_css?(&1, d)})
 
     Map.new(parsed, fn
@@ -88,11 +86,9 @@ defmodule TailwindSort.Sorter do
 
   # Port of getVariantOrder. We sort every variant in use, and variants that compare equal share a bit.
   defp rank_variants(resolved, d) do
-    for_result = for({_, {vs, _}} <- resolved, v <- vs, do: v)
-
     sorted =
-      for_result
-      |> Enum.uniq_by(& &1.raw)
+      resolved
+      |> list_used_variants()
       |> Enum.sort(&(Variant.compare_variants(&1, &2, d) <= 0))
 
     {ranks, _, _} =
@@ -102,6 +98,11 @@ defmodule TailwindSort.Sorter do
       end)
 
     ranks
+  end
+
+  defp list_used_variants(classes) do
+    for_result = for({_, {variants, _}} <- classes, v <- variants, do: v)
+    Enum.uniq_by(for_result, & &1.raw)
   end
 
   @spec compare_sort_keys(sort_key(), sort_key()) :: integer()
@@ -140,17 +141,8 @@ defmodule TailwindSort.Sorter do
   @spec sort_class_string(classes :: String.t(), Design.t(), keyword()) :: String.t()
   def sort_class_string(str, d, opts \\ []) do
     {classes, gaps} = split_classes(str)
-
-    {prefix, classes, gaps} =
-      if opts[:ignore_first] && classes != [],
-        do: {hd(classes) <> gap_space(gaps), tl(classes), max(gaps - 1, 0)},
-        else: {"", classes, gaps}
-
-    {suffix, classes, gaps} =
-      if opts[:ignore_last] && classes != [],
-        do: {gap_space(gaps) <> List.last(classes), Enum.drop(classes, -1), max(gaps - 1, 0)},
-        else: {"", classes, gaps}
-
+    {prefix, classes, gaps} = pin_first_class(classes, gaps, opts[:ignore_first])
+    {suffix, classes, gaps} = pin_last_class(classes, gaps, opts[:ignore_last])
     {sorted, removed} = sort_class_list(classes, d, opts)
     trailing = if sorted != [] and gaps - removed >= length(sorted), do: " ", else: ""
 
@@ -161,6 +153,16 @@ defmodule TailwindSort.Sorter do
 
     replace_trailing_whitespace(prefix, " ") <> result <> replace_leading_whitespace(suffix, " ")
   end
+
+  defp pin_first_class([first | rest], gaps, pin?) when pin? not in [nil, false],
+    do: {first <> gap_space(gaps), rest, max(gaps - 1, 0)}
+
+  defp pin_first_class(classes, gaps, _pin?), do: {"", classes, gaps}
+
+  defp pin_last_class([_ | _] = classes, gaps, pin?) when pin? not in [nil, false],
+    do: {gap_space(gaps) <> List.last(classes), Enum.drop(classes, -1), max(gaps - 1, 0)}
+
+  defp pin_last_class(classes, gaps, _pin?), do: {"", classes, gaps}
 
   # Mirrors the split in prettier-plugin-tailwindcss. Leading whitespace leaves an empty first class,
   # which is unknown and so stays in front. `gaps` counts the whitespace runs, and each run becomes one space.

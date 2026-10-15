@@ -73,7 +73,7 @@ defmodule TailwindSort.Candidate do
       else
         base_wo_mod
         |> find_utility_roots(d)
-        |> build_functional_parses(modifier, mod_segment, [])
+        |> build_functional_parses(modifier, [])
       end
     else
       :error -> []
@@ -178,35 +178,31 @@ defmodule TailwindSort.Candidate do
   defp split_var_shorthand(_), do: nil
 
   # Mirrors the generator loop in candidate.ts. A `continue` there skips one root, and a `return` stops them all.
-  defp build_functional_parses([], _modifier, _seg, acc), do: Enum.reverse(acc)
+  defp build_functional_parses([], _modifier, acc), do: Enum.reverse(acc)
 
-  defp build_functional_parses([{root, nil} | rest], modifier, seg, acc),
-    do: build_functional_parses(rest, modifier, seg, [{:functional, root, nil, modifier} | acc])
+  defp build_functional_parses([{root, value} | rest], modifier, acc) do
+    case parse_root_value(value) do
+      {:ok, v} -> build_functional_parses(rest, modifier, [{:functional, root, v, modifier} | acc])
+      :skip -> build_functional_parses(rest, modifier, acc)
+      :stop -> Enum.reverse(acc)
+    end
+  end
 
-  defp build_functional_parses([{root, value} | rest], modifier, seg, acc) do
-    case :binary.match(value, "[") do
-      {start, _} ->
-        if String.ends_with?(value, "]") do
-          case parse_arbitrary_value(binary_part(value, start + 1, byte_size(value) - start - 2)) do
-            nil ->
-              build_functional_parses(rest, modifier, seg, acc)
+  defp parse_root_value(nil), do: {:ok, nil}
 
-            v ->
-              build_functional_parses(rest, modifier, seg, [
-                {:functional, root, v, modifier} | acc
-              ])
-          end
-        else
-          Enum.reverse(acc)
+  defp parse_root_value(value) do
+    case {:binary.match(value, "["), String.ends_with?(value, "]")} do
+      {:nomatch, _} ->
+        if Text.named_value?(value), do: {:ok, {:named, value}}, else: :skip
+
+      {_, false} ->
+        :stop
+
+      {{start, _}, true} ->
+        case parse_arbitrary_value(binary_part(value, start + 1, byte_size(value) - start - 2)) do
+          nil -> :skip
+          v -> {:ok, v}
         end
-
-      :nomatch ->
-        if Text.named_value?(value),
-          do:
-            build_functional_parses(rest, modifier, seg, [
-              {:functional, root, {:named, value}, modifier} | acc
-            ]),
-          else: build_functional_parses(rest, modifier, seg, acc)
     end
   end
 

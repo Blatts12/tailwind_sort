@@ -64,51 +64,36 @@ defmodule TailwindSort.Variant do
   defp try_roots([], _mod, _raw, _d), do: nil
 
   defp try_roots([{root, value} | rest], mod, raw, d) do
-    case {d.variants[root].kind, value} do
-      {:static, nil} when mod == nil ->
-        %{kind: :static, root: root, raw: raw}
+    variant =
+      case {d.variants[root].kind, value} do
+        {:static, nil} when mod == nil -> %{kind: :static, root: root, raw: raw}
+        {:static, _} -> nil
+        {:functional, value} -> build_functional_variant(root, value, mod, raw)
+        {:compound, nil} -> nil
+        {:compound, value} -> build_compound_variant(root, value, mod, raw, d)
+      end
 
-      {:static, _} ->
-        nil
+    if variant == :continue, do: try_roots(rest, mod, raw, d), else: variant
+  end
 
-      {:functional, nil} ->
-        build_with_modifier(
-          mod,
-          &%{kind: :functional, root: root, raw: raw, value: nil, modifier: &1}
-        )
+  defp build_functional_variant(root, nil, mod, raw),
+    do: build_with_modifier(mod, &%{kind: :functional, root: root, raw: raw, value: nil, modifier: &1})
 
-      {:functional, value} ->
-        case parse_functional_value(value) do
-          :continue ->
-            try_roots(rest, mod, raw, d)
-
-          nil ->
-            nil
-
-          v ->
-            build_with_modifier(
-              mod,
-              &%{kind: :functional, root: root, raw: raw, value: v, modifier: &1}
-            )
-        end
-
-      {:compound, nil} ->
-        nil
-
-      {:compound, value} ->
-        {value, mod} =
-          if mod && root in ~w(not has in), do: {"#{value}/#{mod}", nil}, else: {value, mod}
-
-        with sub when sub != nil <- parse_variant(value, d),
-             true <- compounds_with?(root, sub, d) do
-          build_with_modifier(
-            mod,
-            &%{kind: :compound, root: root, raw: raw, variant: sub, modifier: &1}
-          )
-        else
-          _ -> nil
-        end
+  defp build_functional_variant(root, value, mod, raw) do
+    case parse_functional_value(value) do
+      :continue -> :continue
+      nil -> nil
+      v -> build_with_modifier(mod, &%{kind: :functional, root: root, raw: raw, value: v, modifier: &1})
     end
+  end
+
+  # `not`, `has` and `in` hand their modifier down to the variant inside them.
+  defp build_compound_variant(root, value, mod, raw, d) do
+    {value, mod} = if mod && root in ~w(not has in), do: {"#{value}/#{mod}", nil}, else: {value, mod}
+    sub = parse_variant(value, d)
+
+    if sub && compounds_with?(root, sub, d),
+      do: build_with_modifier(mod, &%{kind: :compound, root: root, raw: raw, variant: sub, modifier: &1})
   end
 
   defp build_with_modifier(nil, build_variant), do: build_variant.(nil)
