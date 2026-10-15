@@ -215,28 +215,32 @@ defmodule TailwindSort.Template do
       {:ok, ast} ->
         joins = collect_joined_edges(ast, :free, :free, %{})
 
-        for {open, lines} <- strings,
-            # The AST counts columns in codepoints, so UTF-8 continuation bytes don't count.
-            before = :binary.split(binary_part(src, start, open - start), "\n", [:global]),
-            column = Enum.count(:binary.bin_to_list(List.last(before)), &(&1 not in 0x80..0xBF)) + 1,
-            {lead, trail} = Map.get(joins, {length(before), column}, {:free, :free}),
-            last = length(lines) - 1,
-            {chunks, i} <- Enum.with_index(lines),
-            [reduce: edits] do
-          acc ->
-            build_chunk_edits(
-              src,
-              chunks,
-              ctx,
-              acc,
-              if(i == 0, do: lead, else: :free),
-              if(i == last, do: trail, else: :free)
-            )
-        end
+        Enum.reduce(strings, edits, fn {open, lines}, acc ->
+          {lead, trail} = Map.get(joins, find_line_column(src, start, open), {:free, :free})
+          build_string_edits(src, lines, ctx, acc, lead, trail)
+        end)
 
       {:error, _} ->
         edits
     end
+  end
+
+  # The AST counts columns in codepoints, so UTF-8 continuation bytes don't count.
+  defp find_line_column(src, start, pos) do
+    before = src |> binary_part(start, pos - start) |> :binary.split("\n", [:global])
+    column = before |> List.last() |> :binary.bin_to_list() |> Enum.count(&(&1 not in 0x80..0xBF))
+    {length(before), column + 1}
+  end
+
+  # Only the first line touches what comes before the string, and only the last line what follows it.
+  defp build_string_edits(src, lines, ctx, edits, lead, trail) do
+    last = length(lines) - 1
+
+    lines
+    |> Enum.with_index()
+    |> Enum.reduce(edits, fn {chunks, i}, acc ->
+      build_chunk_edits(src, chunks, ctx, acc, if(i == 0, do: lead, else: :free), if(i == last, do: trail, else: :free))
+    end)
   end
 
   # `lead` and `trail` say what touches the start and end of the string: `:free` for nothing,
